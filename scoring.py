@@ -1,29 +1,94 @@
+import math
 import re
 import sys
-import math
+from collections import Counter
 
-B_CHAR = 7 # ?
+B_CHAR = 7
 B_TYPE = 2
 B_ETX = 7
+WORD_REGEX = r"[a-zA-Z0-9_\.\-]+"
 
-def get_partitions(word: str) -> list:
-    partitions = []
-    n = len(word)
-    
-    for i in range(2 ** (n - 1)):
-        start = 0
-        current_partition = []
+
+def load_text_from_input_file() -> str:
+    try:
+        file_name = sys.argv[1] if len(sys.argv) > 1 else input("Enter file name: ")
         
+        with open(f"inputs/{file_name}", "r", encoding="utf-8") as file:
+            return file.read()
+    except FileNotFoundError:
+        print("The file does not exist")
+        raise SystemExit(1)
+    
+
+def get_partitions(word: str) -> list[list[str]]:
+    partitions: list[list[str]] = []
+    n = len(word)
+
+    for mask in range(2 ** (n - 1)):
+        start = 0
+        current_partition: list[str] = []
+
         for j in range(n - 1):
-            if (i >> j) & 1:
-                current_partition.append(word[start:j+1])
+            if (mask >> j) & 1:
+                current_partition.append(word[start : j + 1])
                 start = j + 1
-                
+
         current_partition.append(word[start:])
         partitions.append(current_partition)
-        
-    # print(partitions)
+
     return partitions
+
+
+def build_data(words: list[str]) -> tuple[Counter, dict[str, list[list[str]]], dict[str, dict[str, int]]]:
+    word_frequencies = Counter(words)
+    all_partitions: dict[str, list[list[str]]] = {}
+    fragment_occurrences: dict[str, dict[str, int]] = {}
+
+    for word in word_frequencies:
+        partitions = get_partitions(word)
+        all_partitions[word] = partitions
+
+        possible_fragments = { fragment for partition in partitions for fragment in partition if len(fragment) > 1 }
+        fragment_occurrences[word] = {fragment: word.count(fragment) for fragment in possible_fragments}
+
+    return word_frequencies, all_partitions, fragment_occurrences
+
+
+def aggregate_substring_counts(word_frequencies: Counter, fragment_occurrences: dict[str, dict[str, int]]) -> dict[str, int]:
+    substring_counts: dict[str, int] = {}
+    
+    for word, occurrences_map in fragment_occurrences.items():
+        frequency = word_frequencies[word]
+        
+        for fragment, occurrences in occurrences_map.items():
+            substring_counts[fragment] = substring_counts.get(fragment, 0) + (occurrences * frequency)
+    
+    return substring_counts
+
+
+def compute_real_usage(word_frequencies: Counter, all_partitions: dict[str, list[list[str]]], candidate_scores: dict[str, int]) -> dict[str, int]:
+    real_usage: dict[str, int] = {}
+
+    for word, frequency in word_frequencies.items():
+        best_partition: list[str] | None = None
+        best_score = -1
+
+        for partition in all_partitions[word]:
+            current_score = sum(candidate_scores.get(fragment, 0) for fragment in partition)
+            
+            if current_score > best_score:
+                best_score = current_score
+                best_partition = partition
+
+        if best_score <= 0 or best_partition is None:
+            continue
+
+        for fragment in best_partition:
+            if fragment in candidate_scores:
+                real_usage[fragment] = real_usage.get(fragment, 0) + frequency
+
+    return real_usage
+
 
 def calculate_u_di(substr: str, n_occ: int, b_key: int) -> int:
     l_bits = len(substr) * B_CHAR
@@ -34,88 +99,66 @@ def calculate_u_di(substr: str, n_occ: int, b_key: int) -> int:
     
     return saving - storage_cost - pointer_cost
 
-def create_dict(unique_words: list, words_list: list, all_partitions: dict) -> tuple:
-    current_b_key = math.ceil(math.log2(len(unique_words))) if unique_words else 1
-    stable = False
-    final_dict_entries = {}
 
-    while not stable:
-        substring_counts = {}
-        for word in words_list:
-            possible_fragments = set()
-            
-            for p in all_partitions[word]:
-                for fragment in p:
-                    if len(fragment) > 1:
-                        possible_fragments.add(fragment)
-            
-            for f in possible_fragments:
-                substring_counts[f] = substring_counts.get(f, 0) + word.count(f)
+def stabilize_b_key(n_unique_words: int, word_frequencies: Counter, all_partitions: dict[str, list[list[str]]], fragment_occurrences: dict[str, dict[str, int]]) -> tuple[int, dict[str, int]]:
+    current_b_key = math.ceil(math.log2(n_unique_words)) if n_unique_words > 0 else 1
+    
+    seen_b_keys = set()
+    best_results = (current_b_key, {})
+    max_total_saving = -1
 
-        candidate_scores = {}
-        for sub, occ in substring_counts.items():
-            score = calculate_u_di(sub, occ, current_b_key)
-            
-            if score > 0:
-                candidate_scores[sub] = score
+    while current_b_key not in seen_b_keys:
+        seen_b_keys.add(current_b_key)
+        
+        substring_counts = aggregate_substring_counts(word_frequencies, fragment_occurrences)
+        candidate_scores = {
+            substring: score 
+                for substring, occurrences in substring_counts.items() 
+                if (score := calculate_u_di(substring, occurrences, current_b_key)) > 0
+        }
+        
+        real_usage = compute_real_usage(word_frequencies, all_partitions, candidate_scores)
 
-        real_usage = {}
-        for word in words_list:
-            best_p = None
-            max_s = -1
-            
-            for p in all_partitions[word]:
-                current_s = sum(candidate_scores.get(sub, 0) for sub in p)
-                
-                if current_s > max_s:
-                    max_s = current_s
-                    best_p = p
-            
-            if max_s > 0:
-                for fragment in best_p:
-                    if fragment in candidate_scores:
-                        real_usage[fragment] = real_usage.get(fragment, 0) + 1
+        current_saving = sum(calculate_u_di(f, occ, current_b_key) for f, occ in real_usage.items())
+        
+        if current_saving > max_total_saving:
+            max_total_saving = current_saving
+            best_results = (current_b_key, real_usage)
 
         new_n_entries = len(real_usage)
         new_b_key = math.ceil(math.log2(new_n_entries)) if new_n_entries > 0 else 1
         
         if new_b_key == current_b_key:
-            stable = True
-            final_dict_entries = real_usage
-        else:
-            current_b_key = new_b_key
-            
-    return (current_b_key, final_dict_entries)
-
-def main():
-    try:
-        if len(sys.argv) > 1:
-            file = sys.argv[1]
-        else:
-            file = input("Enter file name: ")
-            
-        with open(f"inputs/{file}", 'r', encoding = 'utf-8') as f:
-            text = f.read()
-    except FileNotFoundError:
-        print("The file does not exist")
-        exit(1)
+            break
         
-    word_regex = r'[a-zA-Z0-9_\.\-]+'
-    words_list = re.findall(word_regex, text)
-    unique_words = list(dict.fromkeys(words_list))
-    
-    all_partitions = {}
-    for word in words_list:
-        all_partitions[word] = get_partitions(word)
-    
-    b_key, final_dict = create_dict(unique_words, words_list, all_partitions)
+        current_b_key = new_b_key
+        
+    return best_results
 
-    # --- OUTPUT FINALE ---
-    print(f"B_KEY STABILE: {b_key} bit")
-    print(f"Voci effettive nel dizionario: {len(final_dict)}")
-    print("-" * 30)
-    for sub, count in sorted(final_dict.items(), key=lambda x: x[1], reverse=True):
-        print(f"Frammento: {sub:15} | Usi reali: {count}")
+
+def print_results(b_key: int, final_dict: dict[str, int]) -> None:
+    print(f"Key bit: {b_key} bits")
+    print(f"Dict length: {len(final_dict)}\n")
     
+    for sub, count in sorted(final_dict.items(), key = lambda item: item[1], reverse = True):
+        print(f"Fragment: {sub:15} | Uses: {count}")
+
+
+def main() -> None:
+    text = load_text_from_input_file()
+    words = re.findall(WORD_REGEX, text)
+
+    word_frequencies, all_partitions, fragment_occurrences = build_data(words)
+    
+    b_key, final_dict = stabilize_b_key(
+        n_unique_words = len(word_frequencies),
+        word_frequencies = word_frequencies,
+        all_partitions = all_partitions,
+        fragment_occurrences = fragment_occurrences,
+    )
+
+    print_results(b_key, final_dict)
+
+
 if __name__ == "__main__":
     main()
