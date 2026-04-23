@@ -1,165 +1,153 @@
 input "Operation?"
-
 if "Check status":
-   input "What led?"
-   if "Power":
-      input "What color?"
-      if "Amber initial":
-         print "Starting/Getting IP address" exit
-      else if "Green":
-         print "Operating standalone mode" exit
-      else if "Blue":
-         print "Operating insight mode" exit
-      else if "Blinking Amber":
-         print "Firmware update" exit
-      else if "Blinking multicolor":
-         print "Mesh setup in progress" exit
-      else if "Amber during operation":
-         print "PoE problem" exit
-      else if "Off":
-         print "No power" exit
-
-   else if "LAN":
-      input "What color?"
-      if "Green":
-         print "2.5 Gbps Ethernet link" exit
-      else if "Blinking Green":
-         print "Activity on a 2.5 Gbps Ethernet link" exit
-      else if "Amber":
-         print "Ethernet link lower than 2.5 Gbps" exit
-      else if "Blinking Amber":
-         print "Activity on an Ethernet link lower than 2.5 Gbps" exit
-
-   else if "2.4 or 5.0 GHz":
-      input "What color?"
-      if "Green":
-         print "Wi-Fi radio on / No client" exit
-      else if "Blue":
-         print "Wi-Fi radio on / with client" exit
-      else if "Blinking blue":
-         print "Activity detected" exit
-
+input "What led?"
+if "Power":
+input "What color?"
+if "Amber initial":
+print "Starting/Getting IP address" exit
+else if "Green":
+print "Operating standalone mode" exit
+else if "Blue":
+print "Operating insight mode" exit
+else if "Blinking Amber":
+print "Firmware update" exit
+else if "Blinking multicolor":
+print "Mesh setup in progress" exit
+else if "Amber during operation":
+print "PoE problem" exit
+else if "Off":
+print "No power" exit
+else if "LAN":
+input "What color?"
+if "Green":
+print "2.5 Gbps Ethernet link" exit
+else if "Blinking Green":
+print "Activity on a 2.5 Gbps Ethernet link" exit
+else if "Amber":
+print "Ethernet link lower than 2.5 Gbps" exit
+else if "Blinking Amber":
+print "Activity on an Ethernet link lower than 2.5 Gbps" exit
+else if "2.4 or 5.0 GHz":
+input "What color?"
+if "Green":
+print "Wi-Fi radio on / No client" exit
+else if "Blue":
+print "Wi-Fi radio on / with client" exit
+else if "Blinking blue":
+print "Activity detected" exit
 else if "Configuration":
-   input "What do you need?"
-   if "AP configuration User / Password":
-      print "User: admin"
-      print "Password: 1234" exit
-   else if "Network access SSID / Password":
-      print "SSID: my_net"
-      print "Password: 123456" exit
-   else if "IP":
-      print "192.168.4.2" exit
-
+input "What do you need?"
+if "AP configuration User / Password":
+print "User: admin"
+print "Password: 1234" exit
+else if "Network access SSID / Password":
+print "SSID: my_net"
+print "Password: 123456" exit
+else if "IP":
+print "192.168.4.2" exit
 else if "Generic information":
-   input "About what?"
-   if "Standard":
-      inputs "Insert speed in Mbps"
-      ifc > 9600:
-         print "802.11be (Wi-Fi 7)" exit
-      else ifc > 3500:
-         print "802.11ax (Wi-Fi 6)" exit
-      else ifc > 600:
-         print "802.11ac (Wi-Fi 5)" exit
-      else ifc > 54:
-         print "802.11n (Wi-Fi 4)" exit
-      else:
-         print "802.11g" exit
-
+input "About what?"
+if "Standard":
+inputs "Insert speed in Mbps"
+ifc > 9600:
+print "802.11be (Wi-Fi 7)" exit
+else ifc > 3500:
+print "802.11ax (Wi-Fi 6)" exit
+else ifc > 600:
+print "802.11ac (Wi-Fi 5)" exit
+else ifc > 54:
+print "802.11n (Wi-Fi 4)" exit
+else:
+print "802.11g" exit
 input "What led?"
 if "RUN LED":
-    print "Operating status of the switch"
-    input "What color?"
-    if "Green":
-        print "Normal operation" exit
-    else if "Flashing Green":
-        input "At what speed?"
-        if "500 ms interval":
-            print "Reset button pressed" exit
-        else if "250 ms interval":
-            print "Normally operating with USB drive connected"
-            exit
-    else if "Flashing Red":
-        print "Initializing" exit
-    else if "Off":
-        print "Power-off" exit
-
+print "Operating status of the switch"
+input "What color?"
+if "Green":
+print "Normal operation" exit
+else if "Flashing Green":
+input "At what speed?"
+if "500 ms interval":
+print "Reset button pressed" exit
+else if "250 ms interval":
+print "Normally operating with USB drive connected"
+exit
+else if "Flashing Red":
+print "Initializing" exit
+else if "Off":
+print "Power-off" exit
 else if "ERR LED":
-    print "Error status"
-    input "What color?"
-    if "On Red":
-        print "Initial error occurred/USB flash drive failed" exit
-    if "Off Red":
-        print "No error" exit
-
+print "Error status"
+input "What color?"
+if "On Red":
+print "Initial error occurred/USB flash drive failed" exit
+if "Off Red":
+print "No error" exit
 else if "PW1 LED":
-    print "Status of power supply 1"
-    input "What color?"
-    if "On":
-        print "Power-on on power supply 1" exit
-    else if "Off":
-        print "Power-off on power supply 1" exit
-
+print "Status of power supply 1"
+input "What color?"
+if "On":
+print "Power-on on power supply 1" exit
+else if "Off":
+print "Power-off on power supply 1" exit
 else if "PW2 LED":
-    print "Status of power supply 2"
-    input "What color?"
-    if "On":
-        print "Power-on on power supply 2" exit
-    else if "Off":
-        print "Power-off on power supply 2" exit
-
+print "Status of power supply 2"
+input "What color?"
+if "On":
+print "Power-on on power supply 2" exit
+else if "Off":
+print "Power-off on power supply 2" exit
 else if "SYNC LED":
-    print "Synchronization status"
-    input "What color?"
-    if "On Orange":
-        print "Operating as the time synchronization master" exit
-    else if "On Green":
-        print "Operating as the time synchronization device" exit
-    else if "Flashing orange":
-        print "Initializing time synchronization process, or time synchronization unstable state" exit
-    else if "Off":
-        print "Time synchronization function disabled" exit
-
+print "Synchronization status"
+input "What color?"
+if "On Orange":
+print "Operating as the time synchronization master" exit
+else if "On Green":
+print "Operating as the time synchronization device" exit
+else if "Flashing orange":
+print "Initializing time synchronization process, or time synchronization unstable state" exit
+else if "Off":
+print "Time synchronization function disabled" exit
 inputs "How many heart beats can you count in 10 seconds?"
 ifc <= 5:
-    print "The person has a heart beat rate too low. You should call an ambulance."
-    print "In the mean time you should try doing a cardiac massage and then using the defibrillator."
-    print 1 # "Apply the two pads to the bare chest. One in the middle of the chest and one on the left side slightly below the nipple."
-    print 2 # "Don't touch the body and start the defibrillator."
-    input "After a couple of charges does the patient woke up?"
-    if "Yes":
-        print "Great! Wait for the ambulance and keep the patient awake."
-    else if "No":
-        print "Keep alternating between 2-3 minutes of cardiac massage and defibrillator charges until the ambulance arrives."
+print "The person has a heart beat rate too low. You should call an ambulance."
+print "In the mean time you should try doing a cardiac massage and then using the defibrillator."
+print 1 # "Apply the two pads to the bare chest. One in the middle of the chest and one on the left side slightly below the nipple."
+print 2 # "Don't touch the body and start the defibrillator."
+input "After a couple of charges does the patient woke up?"
+if "Yes":
+print "Great! Wait for the ambulance and keep the patient awake."
+else if "No":
+print "Keep alternating between 2-3 minutes of cardiac massage and defibrillator charges until the ambulance arrives."
 else ifc <= 10:
-    print "The person has a slightly low heart beat. Sit them down."
-    print "If they don't feel better after a couple of minutes it's better to call an ambulance."
+print "The person has a slightly low heart beat. Sit them down."
+print "If they don't feel better after a couple of minutes it's better to call an ambulance."
 else ifc >= 30:
-    print "The person has a very high heart rate. Lay them down and make them do deep breaths."
-    print "If they don't feel better after a couple of minutes it's better to call an ambulance."
+print "The person has a very high heart rate. Lay them down and make them do deep breaths."
+print "If they don't feel better after a couple of minutes it's better to call an ambulance."
 else:
-    print "The heart beat is normal."
-
+print "The heart beat is normal."
 input "Are you tired?"
 if "yes":
-    input "Do you prefer a lake or a pine forest?"
-    if "lake":
-        print "Pay attention to the cross with the busy road"
-        print 1 # Reference to lake indications
-        exit
-    else if "forest":
-        input "Do you feel like walking for an hour?"
-        if "yes":
-            print 4 # Ref. to Madonna della Neve hut (1595 meters)
-            print "You will find the forest on the way"
-            exit
-        else:
-            print 2 # Reference to pine forest indications
-            exit
+input "Do you prefer a lake or a pine forest?"
+if "lake":
+print "Pay attention to the cross with the busy road"
+print 1 # Reference to lake indications
+exit
+else if "forest":
+input "Do you feel like walking for an hour?"
+if "yes":
+print 4 # Ref. to Madonna della Neve hut (1595 meters)
+print "You will find the forest on the way"
+exit
+else:
+print 2 # Reference to pine forest indications
+exit
 else if "no":
-    inputs "How long do you want to walk (minutes)?"
-    ifc > 120:
-        print 3 # Reference to Rivetti hut (2150 meters)
-        exit
-    else:
-        print 4 # Ref. to Madonna della Neve hut (1595 meters)
-        exit
+inputs "How long do you want to walk (minutes)?"
+ifc > 120:
+print 3 # Reference to Rivetti hut (2150 meters)
+exit
+else:
+print 4 # Ref. to Madonna della Neve hut (1595 meters)
+exit
