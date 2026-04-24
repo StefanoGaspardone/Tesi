@@ -3,35 +3,32 @@ import re
 import sys
 from collections import Counter
 
-
-B_CHAR = 7
+B_FLAG = 1
 B_TYPE = 2
-B_ETX = 7
-WORD_REGEX = r"[a-zA-Z0-9_\-]+"
+B_ETX = 8
+WORD_REGEX = re.compile(rb"[a-zA-Z0-9_\-]+")
 
+def load_binary_from_input_file() -> bytes:
+    """Read an input file from the inputs folder and return its raw bytes."""
 
-def load_text_from_input_file() -> str:
-    """Reads the input text file and returns its full content as a string."""
-    
     try:
         file_name = sys.argv[1] if len(sys.argv) > 1 else input("Enter file name: ")
-        
-        with open(f"inputs/{file_name}", "r", encoding="utf-8") as file:
+
+        with open(f"inputs/{file_name}", "rb") as file:
             return file.read()
     except FileNotFoundError:
         print("The file does not exist")
         sys.exit(1)
 
+def get_partitions(word: bytes) -> list[list[bytes]]:
+    """Generate all possible contiguous partitions of a word."""
 
-def get_partitions(word: str) -> list[list[str]]:
-    """Generates all possible ways to split a word into contiguous fragments."""
-    
-    partitions: list[list[str]] = []
+    partitions: list[list[bytes]] = []
     n = len(word)
 
     for i in range(2 ** (n - 1)):
         start = 0
-        current_partition: list[str] = []
+        current_partition: list[bytes] = []
 
         for j in range(n - 1):
             if (i >> j) & 1:
@@ -43,160 +40,143 @@ def get_partitions(word: str) -> list[list[str]]:
 
     return partitions
 
+def build_data(words: list[bytes]) -> tuple[Counter[bytes], dict[bytes, list[list[bytes]]], dict[bytes, dict[bytes, int]]]:
+    """Build core data structures: frequencies, partitions, and fragment occurrences."""
 
-def build_data(words: list[str]) -> tuple[Counter, dict[str, list[list[str]]], dict[str, dict[str, int]]]:
-    """Builds the base data: word counts, all partitions, and fragment occurrences per word."""
-    
-    word_frequencies = Counter(words)
-    all_partitions: dict[str, list[list[str]]] = {}
-    fragment_occurrences: dict[str, dict[str, int]] = {}
+    word_frequencies: Counter[bytes] = Counter(words)
+    all_partitions: dict[bytes, list[list[bytes]]] = {}
+    fragment_occurrences: dict[bytes, dict[bytes, int]] = {}
 
     for word in word_frequencies:
         partitions = get_partitions(word)
         all_partitions[word] = partitions
 
-        possible_fragments = { fragment for partition in partitions for fragment in partition }
-        fragment_occurrences[word] = {fragment: word.count(fragment) for fragment in possible_fragments}
+        possible_fragments = {frag for part in partitions for frag in part}
+        fragment_occurrences[word] = {frag: word.count(frag) for frag in possible_fragments}
 
     return word_frequencies, all_partitions, fragment_occurrences
 
+def aggregate_substring_counts(word_frequencies: Counter[bytes], fragment_occurrences: dict[bytes, dict[bytes, int]],) -> dict[bytes, int]:
+    """Aggregate global occurrences for each fragment across all words."""
 
-def aggregate_substring_counts(word_frequencies: Counter, fragment_occurrences: dict[str, dict[str, int]]) -> dict[str, int]:
-    """Computes how many times each fragment appears in the whole text."""
-    
-    substring_counts: dict[str, int] = {}
-    
-    for word, occurrences_map in fragment_occurrences.items():
-        frequency = word_frequencies[word]
-        
-        for fragment, occurrences in occurrences_map.items():
-            substring_counts[fragment] = substring_counts.get(fragment, 0) + (occurrences * frequency)
-    
+    substring_counts: dict[bytes, int] = {}
+
+    for word, occ_map in fragment_occurrences.items():
+        freq = word_frequencies[word]
+
+        for frag, occ in occ_map.items():
+            substring_counts[frag] = substring_counts.get(frag, 0) + (occ * freq)
+
     return substring_counts
 
+def get_key_bits(n_entries: int) -> int:
+    """Return the number of bits needed to address n_entries dictionary items."""
 
-def compute_real_usage(word_frequencies: Counter, all_partitions: dict[str, list[list[str]]], candidate_scores: dict[str, int]) -> dict[str, int]:
-    """Chooses, for each word, the best partition by score and count the real fragment usage."""
-    
-    real_usage: dict[str, int] = {}
+    return math.ceil(math.log2(n_entries)) if n_entries > 0 else 1
 
-    for word, frequency in word_frequencies.items():
-        best_partition: list[str] | None = None
-        best_score = -1
+def calculate_u_di(fragment: bytes, count: int, b_key: int, b_unit: int) -> int:
+    """Compute the bit gain of encoding a fragment with the current key width."""
 
-        for partition in all_partitions[word]:
-            current_score = sum(candidate_scores.get(fragment, 0) for fragment in partition)
+    l_bits = len(fragment) * b_unit
+
+    saving = count * l_bits
+    storage_cost = l_bits + B_ETX + B_TYPE
+    pointer_cost = count * (B_FLAG + b_key)
+
+    return saving - storage_cost - pointer_cost
+
+def get_best_partition(partitions: list[list[bytes]], candidate_scores: dict[bytes, int]) -> list[bytes] | None:
+    """Return the partition with the highest score."""
+
+    best_partition = None
+    best_score = -1
+
+    for partition in partitions:
+            current_score = sum(candidate_scores.get(frag, 0) for frag in partition)
             
             if current_score > best_score:
                 best_score = current_score
                 best_partition = partition
+                
+    return best_partition
 
-        if best_score <= 0 or best_partition is None:
-            continue
+def normalize_dictionary(usage_counts: dict[bytes, int], b_unit: int) -> tuple[int, dict[bytes, int], int]:
+    """Iteratively prune non-profitable entries until the dictionary stabilizes."""
 
-        for fragment in best_partition:
-            if fragment in candidate_scores:
-                real_usage[fragment] = real_usage.get(fragment, 0) + frequency
-
-    return real_usage
-
-
-def calculate_u_di(substr: str, n_occ: int, b_key: int) -> int:
-    """Calculate the utility score of a fragment using savings, storage cost, and pointer cost."""
-    
-    l_bits = len(substr) * B_CHAR
-    
-    saving = n_occ * l_bits
-    storage_cost = l_bits + B_ETX + B_TYPE
-    pointer_cost = n_occ * (1 + b_key)
-    
-    return saving - storage_cost - pointer_cost
-
-
-def compute_key_bits(n_entries: int) -> int:
-    """Returns the number of bits needed to encode a dictionary of this size."""
-
-    return math.ceil(math.log2(n_entries)) if n_entries > 0 else 1
-
-
-def normalize_dict(usage: dict[str, int]) -> tuple[int, dict[str, int], int]:
-    """Prunes fragments and returns effective key width, filtered usage, and total saving."""
-
-    current_usage = usage
-
+    current = usage_counts
     while True:
-        if not current_usage:
+        if not current:
             return 1, {}, 0
 
-        effective_b_key = compute_key_bits(len(current_usage))
-        filtered_usage: dict[str, int] = {}
-        current_saving = 0
+        b_key = get_key_bits(len(current))
+        filtered = {
+            fragment: occ
+            for fragment, occ in current.items()
+            if calculate_u_di(fragment, occ, b_key, b_unit) > 0
+        }
 
-        for fragment, occurrences in current_usage.items():
-            saving = calculate_u_di(fragment, occurrences, effective_b_key)
+        if len(filtered) == len(current):
+            total_saving = sum(calculate_u_di(fragment, occ, b_key, b_unit) for fragment, occ in filtered.items())
+            return b_key, filtered, total_saving
 
-            if saving > 0:
-                filtered_usage[fragment] = occurrences
-                current_saving += saving
+        current = filtered
 
-        if len(filtered_usage) == len(current_usage):
-            return effective_b_key, filtered_usage, current_saving
+def create_dict(word_frequencies: Counter[bytes], all_partitions: dict[bytes, list[list[bytes]]], fragment_occurrences: dict[bytes, dict[bytes, int]], b_unit: int) -> tuple[int, dict[bytes, int]]:
+    """Run the optimization loop to stabilize key width and dictionary entries, in order to create the final dict."""
 
-        current_usage = filtered_usage
-
-
-def stabilize_b_key(n_unique_words: int, word_frequencies: Counter, all_partitions: dict[str, list[list[str]]], fragment_occurrences: dict[str, dict[str, int]]) -> tuple[int, dict[str, int]]:
-    """Adjusts key bits and keeps iterating while total savings keep improving."""
-
-    current_b_key = compute_key_bits(n_unique_words)
-    best_results = (current_b_key, {})
-    max_total_saving = -1
+    b_key = get_key_bits(len(word_frequencies))
+    best_saving = -1
+    best_dict = {}
     substring_counts = aggregate_substring_counts(word_frequencies, fragment_occurrences)
 
     while True:
-        candidate_scores = {
+        candidates = {
             sub: score
             for sub, occ in substring_counts.items()
-            if (score := calculate_u_di(sub, occ, current_b_key)) > 0
+            if (score := calculate_u_di(sub, occ, b_key, b_unit)) > 0
         }
 
-        if not candidate_scores:
+        if not candidates:
             break
 
-        real_usage = compute_real_usage(word_frequencies, all_partitions, candidate_scores)
-        effective_b_key, final_usage, current_saving = normalize_dict(real_usage)
+        real_usage: dict[bytes, int] = {}
+        for word, freq in word_frequencies.items():
+            best_partition = get_best_partition(all_partitions[word], candidates)
+            
+            if best_partition is None:
+                continue
 
-        if not final_usage:
+            for fragment in best_partition:
+                if fragment in candidates:
+                    real_usage[fragment] = real_usage.get(fragment, 0) + freq
+
+        eff_key, final_usage, saving = normalize_dictionary(dict(real_usage), b_unit)
+        print(f"Saving: {saving} | Key: {eff_key} | Entries: {len(final_usage)}")
+
+        if not final_usage or saving < best_saving or (saving == best_saving and eff_key > b_key) or (saving == best_saving and eff_key == b_key and len(final_usage) >= len(best_dict)):
             break
 
-        print(f"Saving: {current_saving} bits (key bits {effective_b_key}): {len(final_usage)} dict entries")
+        best_saving, best_dict, b_key = saving, final_usage, eff_key
 
-        if current_saving <= max_total_saving:
-            break
+    return best_saving, best_dict
 
-        max_total_saving = current_saving
-        best_results = (effective_b_key, final_usage)
-
-        if effective_b_key == current_b_key:
-            break
-
-        current_b_key = effective_b_key
-
-    return best_results
-
-
-def print_results(final_dict: dict[str, int]) -> None:
-    effective_b_key = compute_key_bits(len(final_dict))
+def print_results(final_dict: dict[bytes, int], total_saving: int, raw_data_len: int, b_unit: int) -> None:
+    effective_b_key = get_key_bits(len(final_dict))
+    
+    initial_bits_8 = raw_data_len * 8
+    initial_bits_opt = raw_data_len * b_unit
+    encoding_gain = initial_bits_8 - initial_bits_opt
+    total_real_saving = encoding_gain + total_saving
 
     rows = [
-        (pos, fragment, count, calculate_u_di(fragment, count, effective_b_key))
-        for pos, (fragment, count) in enumerate(sorted(final_dict.items(), key=lambda item: item[1], reverse=True))
+        (pos, fragment, count, calculate_u_di(fragment, count, effective_b_key, b_unit))
+        for pos, (fragment, count) in enumerate(sorted(final_dict.items(), key = lambda item: item[1], reverse = True))
     ]
 
     pos_width = max(3, len(str(len(rows) - 1)) if rows else 3)
-    fragment_width = max(8, max((len(fragment) for _, fragment, _, _ in rows), default=8))
-    uses_width = max(4, max((len(str(count)) for _, _, count, _ in rows), default=4))
-    saving_width = max(10, max((len(str(saving)) for _, _, _, saving in rows), default=10))
+    fragment_width = max(8, max((len(fragment) for _, fragment, _, _ in rows), default = 8))
+    uses_width = max(4, max((len(str(count)) for _, _, count, _ in rows), default = 4))
+    saving_width = max(10, max((len(str(saving)) for _, _, _, saving in rows), default = 10))
 
     table_width = pos_width + fragment_width + uses_width + saving_width + 13
     border = "+" + "-" * (table_width - 2) + "+"
@@ -204,32 +184,32 @@ def print_results(final_dict: dict[str, int]) -> None:
     print(f"\nFinal Dict Length: {len(final_dict)}")
     print(f"Key bits: {effective_b_key}")
     print(border)
-    print(f"| {'Pos':>{pos_width}} | {'Fragment':<{fragment_width}} | {'Uses':>{uses_width}} | {'Saving':>{saving_width}} |")
+    print(f"| {'Pos':<{pos_width}} | {'Fragment':<{fragment_width}} | {'Uses':<{uses_width}} | {'Saving':<{saving_width}} |")
     print(border)
 
     for pos, fragment, count, saving in rows:
-        print(f"| {pos:>{pos_width}} | {fragment:<{fragment_width}} | {count:>{uses_width}} | {saving:>{saving_width}} |")
+        display_frag = fragment.decode('utf-8', errors = 'replace')
+        print(f"| {pos:<{pos_width}} | {display_frag:<{fragment_width}} | {count:<{uses_width}} | {saving:<{saving_width}} |")
     print(border)
     
-    total_bits_saved = sum(saving for _, _, _, saving in rows)
-    print(f"\nTotal savings: {total_bits_saved} bit")
-
-
-def main() -> None:
-    text = load_text_from_input_file()
-    words = re.findall(WORD_REGEX, text)
-
-    word_frequencies, all_partitions, fragment_occurrences = build_data(words)
+    print(f"\nTotal savings: {total_real_saving} bit")
+    print(f"Total original bits: {initial_bits_8} bits")
     
-    _, final_dict = stabilize_b_key(
-        n_unique_words = len(word_frequencies),
-        word_frequencies = word_frequencies,
-        all_partitions = all_partitions,
-        fragment_occurrences = fragment_occurrences,
-    )
+    perc = (total_real_saving / initial_bits_8) * 100
+    print(f"Compression rate: {perc:.2f}%")
 
-    print_results(final_dict)
-
+def main():
+    raw_data = load_binary_from_input_file()
+    
+    unique_chars = len(set(raw_data))
+    bits_needed = math.ceil(math.log2(unique_chars))
+    
+    words = WORD_REGEX.findall(raw_data)
+    word_freq, all_parts, frag_occ = build_data(words)
+    
+    dict_saving, final_dict = create_dict(word_freq, all_parts, frag_occ, bits_needed)
+    
+    print_results(final_dict, dict_saving, len(raw_data), bits_needed)
 
 if __name__ == "__main__":
     main()
