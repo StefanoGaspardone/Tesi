@@ -4,8 +4,6 @@ import sys
 from collections import Counter
 
 B_FLAG = 1
-B_TYPE = 2
-B_ETX = 8
 WORD_REGEX = re.compile(rb"[a-zA-Z0-9_\-]+")
 
 def load_binary_from_input_file() -> bytes:
@@ -80,7 +78,7 @@ def calculate_u_di(fragment: bytes, count: int, b_key: int, b_unit: int) -> int:
     l_bits = len(fragment) * b_unit
 
     saving = count * l_bits
-    storage_cost = l_bits + B_ETX + B_TYPE
+    storage_cost = l_bits + b_unit # here, b_unit = B_ETX; since i use a optimized encoding for chars, B_TYPE is now useless
     pointer_cost = count * (B_FLAG + b_key)
 
     return saving - storage_cost - pointer_cost
@@ -161,12 +159,30 @@ def create_dict(word_frequencies: Counter[bytes], all_partitions: dict[bytes, li
     return best_saving, best_dict
 
 def print_results(final_dict: dict[bytes, int], total_saving: int, raw_data_len: int, b_unit: int) -> None:
-    effective_b_key = get_key_bits(len(final_dict))
+    n_entries = len(final_dict)
+    effective_b_key = get_key_bits(n_entries)
+    
+    # to specify how many bits for the single char
+    # 11110 -> 4 bits
+    unary_overhead = b_unit + 1
+    
+    protocol_prefix = 6 
+    
+    if n_entries > 0:
+        # k 0s + k bits, the "bits" part necessarily starts with 1
+        
+        k = math.floor(math.log2(n_entries)) + 1
+        bits_for_count = 2 * k
+    else:
+        bits_for_count = 1
+        
+    protocol_overhead = protocol_prefix + bits_for_count
+    total_overhead = unary_overhead + protocol_overhead
     
     initial_bits_8 = raw_data_len * 8
     initial_bits_opt = raw_data_len * b_unit
     encoding_gain = initial_bits_8 - initial_bits_opt
-    total_real_saving = encoding_gain + total_saving
+    total_real_saving = encoding_gain + total_saving - total_overhead
 
     rows = [
         (pos, fragment, count, calculate_u_di(fragment, count, effective_b_key, b_unit))
@@ -181,7 +197,7 @@ def print_results(final_dict: dict[bytes, int], total_saving: int, raw_data_len:
     table_width = pos_width + fragment_width + uses_width + saving_width + 13
     border = "+" + "-" * (table_width - 2) + "+"
 
-    print(f"\nFinal Dict Length: {len(final_dict)}")
+    print(f"\nFinal Dict Length: {n_entries}")
     print(f"Key bits: {effective_b_key}")
     print(border)
     print(f"| {'Pos':<{pos_width}} | {'Fragment':<{fragment_width}} | {'Uses':<{uses_width}} | {'Saving':<{saving_width}} |")
@@ -202,7 +218,7 @@ def main():
     raw_data = load_binary_from_input_file()
     
     unique_chars = len(set(raw_data))
-    bits_needed = math.ceil(math.log2(unique_chars))
+    bits_needed = math.ceil(math.log2(unique_chars + 1))
     
     words = WORD_REGEX.findall(raw_data)
     word_freq, all_parts, frag_occ = build_data(words)
