@@ -146,7 +146,7 @@ def print_results(final_dict: dict[bytes, int], total_saving: int, raw_data_len:
     
     # to specify how many bits for the single char
     # 11110 -> 4 bits (0 = escape bit)
-    unary_overhead = b_unit + 1
+    b_char_overhead = b_unit + 1
     
     protocol_prefix = 6 
     
@@ -156,10 +156,10 @@ def print_results(final_dict: dict[bytes, int], total_saving: int, raw_data_len:
         k = math.floor(math.log2(n_entries)) + 1
         bits_for_count = 2 * k
     else:
-        bits_for_count = 1
+        bits_for_count = 1 # a "1" is enough -> no "0" read, the "1" is skipped
         
     protocol_overhead = protocol_prefix + bits_for_count
-    total_overhead = unary_overhead + protocol_overhead
+    total_overhead = b_char_overhead + protocol_overhead
     
     initial_bits_8 = raw_data_len * 8
     initial_bits_opt = raw_data_len * b_unit
@@ -205,9 +205,9 @@ def main():
     words = WORD_REGEX.findall(raw_data)
     word_freq, all_parts, frag_occ = build_data(words)
     
-    dict_saving, final_dict = create_dict(word_freq, all_parts, frag_occ, bits_needed)
+    final_saving, final_dict = create_dict(word_freq, all_parts, frag_occ, bits_needed)
     
-    print_results(final_dict, dict_saving, len(raw_data), bits_needed)
+    print_results(final_dict, final_saving, len(raw_data), bits_needed)
 
 if __name__ == "__main__":
     main()
