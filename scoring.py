@@ -79,12 +79,9 @@ def calculate_u_di(fragment: bytes, count: int, b_key: int, b_unit: int) -> int:
     Score = saving - (storage_cost + pointer_cost)
     
     Where:
-    - saving: count * (len(fragment) * b_unit)
-      Bits saved by not writing the fragment character-by-character.
-    - storage_cost: (len(fragment) * b_unit) + b_unit
-      Bits required to store the fragment in the dict + ETX terminator.
-    - pointer_cost: count * (B_FLAG + b_key)
-      Bits consumed in the text by the key pointing to the dict.
+    - saving: count * (len(fragment) * b_unit) -> Bits saved by not writing the fragment character by character.
+    - storage_cost: (len(fragment) * b_unit) + b_unit -> Bits required to store the fragment in the dict + ETX terminator.
+    - pointer_cost: count * (B_FLAG + b_key) -> Bits consumed in the text by the key pointing to the dict.
     """    
 
     l_bits = len(fragment) * b_unit
