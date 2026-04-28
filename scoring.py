@@ -135,9 +135,9 @@ def create_dict(word_frequencies: Counter[bytes], all_partitions: dict[bytes, li
                     if frag in candidates_score:
                         current_dict[frag] = current_dict.get(frag, 0) + freq
                         
+        current_key = get_key_bits(len(current_dict))
         current_saving = sum(calculate_u_di(f, occ, get_key_bits(len(current_dict)), b_unit) for f, occ in current_dict.items())
         
-        current_key = get_key_bits(len(current_dict))
         print(f"Saving: {current_saving} | Key bits: {current_key} | Entries: {len(current_dict)}")
 
         if not current_dict or current_saving < best_saving or (current_saving == best_saving and current_key > b_key) or (current_saving == best_saving and current_key == b_key and len(current_dict) >= len(best_dict)):
@@ -149,37 +149,20 @@ def create_dict(word_frequencies: Counter[bytes], all_partitions: dict[bytes, li
 
     return best_dict
 
-def print_results(final_dict: dict[bytes, int], total_real_saving: int, raw_data_len: int, b_unit: int) -> None:
+def print_results(final_dict: dict[bytes, int], total_saving: int, raw_data_len: int, b_unit: int) -> None:
     n_entries = len(final_dict)
     effective_b_key = get_key_bits(n_entries)
-    
-    protocol_prefix = 6 
-    if n_entries > 0:
-        # k 0s + k bits, the "bits" part necessarily starts with 1
-        
-        k = math.floor(math.log2(n_entries)) + 1
-        bits_for_count = 2 * k
-    else:
-        bits_for_count = 1 # a "1" is enough -> no "0" read, the "1" is skipped
-    
-    # to specify how many bits for the single char
-    # 11110 -> 4 bits (0 = escape bit)
-    b_char_overhead = b_unit + 1
-    
-    dict_storage_overhead = protocol_prefix + bits_for_count + b_char_overhead
-    
-    final_saving = total_real_saving - dict_storage_overhead
     initial_bits_8 = raw_data_len * 8
 
     rows = [
         (pos, fragment, count, calculate_u_di(fragment, count, effective_b_key, b_unit))
-        for pos, (fragment, count) in enumerate(sorted(final_dict.items(), key = lambda item: item[1], reverse = True))
+        for pos, (fragment, count) in enumerate(sorted(final_dict.items(), key=lambda item: item[1], reverse=True))
     ]
 
     pos_width = max(3, len(str(len(rows) - 1)) if rows else 3)
-    fragment_width = max(8, max((len(fragment) for _, fragment, _, _ in rows), default = 8))
-    uses_width = max(4, max((len(str(count)) for _, _, count, _ in rows), default = 4))
-    saving_width = max(10, max((len(str(saving)) for _, _, _, saving in rows), default = 10))
+    fragment_width = max(8, max((len(f.decode('utf-8', 'replace')) for _, f, _, _ in rows), default=8))
+    uses_width = max(4, max((len(str(c)) for _, _, c, _ in rows), default=4))
+    saving_width = max(10, max((len(str(s)) for _, _, _, s in rows), default=10))
 
     table_width = pos_width + fragment_width + uses_width + saving_width + 13
     border = "+" + "-" * (table_width - 2) + "+"
@@ -191,24 +174,24 @@ def print_results(final_dict: dict[bytes, int], total_real_saving: int, raw_data
     print(border)
 
     for pos, fragment, count, saving in rows:
-        display_frag = fragment.decode('utf-8', errors = 'replace')
+        display_frag = fragment.decode('utf-8', errors='replace')
         print(f"| {pos:<{pos_width}} | {display_frag:<{fragment_width}} | {count:<{uses_width}} | {saving:<{saving_width}} |")
     print(border)
     
-    print(f"\nTotal real savings: {final_saving} bit")
+    print(f"\nTotal savings: {total_saving} bit")
     print(f"Total original bits: {initial_bits_8} bits")
     
-    perc = (final_saving / initial_bits_8) * 100
+    perc = (total_saving / initial_bits_8) * 100
     print(f"Compression rate: {perc:.2f}%")
     
 def calc_final_saving(raw_data: bytes, final_dict: dict[bytes, int], all_partitions: dict, b_unit: int) -> int:
     n_entries = len(final_dict)
     b_key = get_key_bits(n_entries)
-    candidates_score = dict.fromkeys(final_dict, 1)
-
-    total_bits_compressed = 0
+    
+    total_bits_payload = 0
     current_lit_accumulated = b""
     last_idx = 0
+    candidates_score = dict.fromkeys(final_dict, 1)
 
     for match in WORD_REGEX.finditer(raw_data):
         start, end = match.start(), match.end()
@@ -223,22 +206,42 @@ def calc_final_saving(raw_data: bytes, final_dict: dict[bytes, int], all_partiti
             for frag in best_part:
                 if frag in final_dict:
                     if current_lit_accumulated:
-                        total_bits_compressed += 1 + (len(current_lit_accumulated) * b_unit) + b_unit
+                        total_bits_payload += 1 + (len(current_lit_accumulated) * b_unit) + b_unit
                         current_lit_accumulated = b""
                     
-                    total_bits_compressed += 1 + b_key
+                    total_bits_payload += 1 + b_key
                 else:
                     current_lit_accumulated += frag
         else:
             current_lit_accumulated += word
-            
+        
         last_idx = end
 
     current_lit_accumulated += raw_data[last_idx:]
     if current_lit_accumulated:
-        total_bits_compressed += 1 + (len(current_lit_accumulated) * b_unit) + b_unit
+        total_bits_payload += 1 + (len(current_lit_accumulated) * b_unit) + b_unit
 
-    return (len(raw_data) * 8) - total_bits_compressed
+    fragments_storage_cost = sum((len(frag) * b_unit) + b_unit for frag in final_dict.keys())
+
+    protocol_prefix = 6 
+    if n_entries > 0:
+        # k 0s + k bits, the "bits" part necessarily starts with 1
+        
+        k = math.floor(math.log2(n_entries)) + 1
+        bits_for_count = 2 * k
+    else:
+        bits_for_count = 1 # a "1" is enough -> no "0" read, the "1" is skipped
+    
+    # to specify how many bits for the single char
+    # 11110 -> 4 bits (0 = escape bit)
+    b_char_overhead = b_unit + 1
+    
+    dict_header_cost = protocol_prefix + bits_for_count + b_char_overhead
+    
+    original_bits = len(raw_data) * 8
+    final_compressed_size = total_bits_payload + fragments_storage_cost + dict_header_cost
+    
+    return original_bits - final_compressed_size
 
 def main():
     raw_data = load_binary_from_input_file()
