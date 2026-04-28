@@ -73,12 +73,24 @@ def get_key_bits(n_entries: int) -> int:
     return math.ceil(math.log2(n_entries)) if n_entries > 0 else 1
 
 def calculate_u_di(fragment: bytes, count: int, b_key: int, b_unit: int) -> int:
-    """Compute the bit gain of encoding a fragment with the current key width."""
+    """Compute the bit gain of encoding a fragment with the current key width.
+    
+    Formula:
+    Score = saving - (storage_cost + pointer_cost)
+    
+    Where:
+    - saving: count * (len(fragment) * b_unit)
+      Bits saved by not writing the fragment character-by-character.
+    - storage_cost: (len(fragment) * b_unit) + b_unit
+      Bits required to store the fragment in the dict + ETX terminator.
+    - pointer_cost: count * (B_FLAG + b_key)
+      Bits consumed in the text by the key pointing to the dict.
+    """    
 
     l_bits = len(fragment) * b_unit
 
     saving = count * l_bits
-    storage_cost = l_bits + b_unit # b_unit = B_ETX; since an optimized encoding for chars is used, B_TYPE is now useless
+    storage_cost = l_bits + b_unit # B_ETX = b_unit; B_TYPE is now useless, since an optimized encoding for chars is used
     pointer_cost = count * (B_FLAG + b_key)
 
     return saving - storage_cost - pointer_cost
