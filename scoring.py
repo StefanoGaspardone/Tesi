@@ -7,7 +7,7 @@ B_FLAG = 1
 WORD_REGEX = re.compile(rb"[a-zA-Z0-9_\-]+")
 
 def load_binary_from_input_file() -> bytes:
-    """Read an input file from the inputs folder and return its raw bytes."""
+    """Read an input file and return its raw bytes."""
 
     try:
         file_name = sys.argv[1] if len(sys.argv) > 1 else input("Enter file name: ")
@@ -39,7 +39,7 @@ def get_partitions(word: bytes) -> list[list[bytes]]:
     return partitions
 
 def build_data(words: list[bytes]) -> tuple[Counter[bytes], dict[bytes, list[list[bytes]]], dict[bytes, dict[bytes, int]]]:
-    """Build core data structures: frequencies, partitions, and fragment occurrences."""
+    """Build needed data structures: frequencies, partitions, and fragment occurrences."""
 
     word_frequencies: Counter[bytes] = Counter(words)
     all_partitions: dict[bytes, list[list[bytes]]] = {}
@@ -110,7 +110,7 @@ def get_best_partition(partitions: list[list[bytes]], candidate_scores: dict[byt
                 
     return best_partition
 
-def create_dict(word_frequencies: Counter[bytes], all_partitions: dict[bytes, list[list[bytes]]], fragment_occurrences: dict[bytes, dict[bytes, int]], b_unit: int) -> tuple[int, dict[bytes, int]]:
+def create_dict(word_frequencies: Counter[bytes], all_partitions: dict[bytes, list[list[bytes]]], fragment_occurrences: dict[bytes, dict[bytes, int]], b_unit: int) -> dict[bytes, int]:
     """Run the optimization loop to stabilize key width and dictionary entries, in order to create the final dict."""
 
     best_saving = -1
@@ -150,18 +150,13 @@ def create_dict(word_frequencies: Counter[bytes], all_partitions: dict[bytes, li
         best_dict = current_dict
         current_candidates = current_dict
 
-    return best_saving, best_dict
+    return best_dict
 
-def print_results(final_dict: dict[bytes, int], total_saving: int, raw_data_len: int, b_unit: int) -> None:
+def print_results(final_dict: dict[bytes, int], total_real_saving: int, raw_data_len: int, b_unit: int) -> None:
     n_entries = len(final_dict)
     effective_b_key = get_key_bits(n_entries)
     
-    # to specify how many bits for the single char
-    # 11110 -> 4 bits (0 = escape bit)
-    b_char_overhead = b_unit + 1
-    
     protocol_prefix = 6 
-    
     if n_entries > 0:
         # k 0s + k bits, the "bits" part necessarily starts with 1
         
@@ -169,14 +164,15 @@ def print_results(final_dict: dict[bytes, int], total_saving: int, raw_data_len:
         bits_for_count = 2 * k
     else:
         bits_for_count = 1 # a "1" is enough -> no "0" read, the "1" is skipped
-        
-    protocol_overhead = protocol_prefix + bits_for_count
-    total_overhead = b_char_overhead + protocol_overhead
     
+    # to specify how many bits for the single char
+    # 11110 -> 4 bits (0 = escape bit)
+    b_char_overhead = b_unit + 1
+    
+    dict_storage_overhead = protocol_prefix + bits_for_count + b_char_overhead
+    
+    final_saving = total_real_saving - dict_storage_overhead
     initial_bits_8 = raw_data_len * 8
-    initial_bits_opt = raw_data_len * b_unit
-    encoding_gain = initial_bits_8 - initial_bits_opt
-    total_real_saving = encoding_gain + total_saving - total_overhead
 
     rows = [
         (pos, fragment, count, calculate_u_di(fragment, count, effective_b_key, b_unit))
@@ -202,11 +198,50 @@ def print_results(final_dict: dict[bytes, int], total_saving: int, raw_data_len:
         print(f"| {pos:<{pos_width}} | {display_frag:<{fragment_width}} | {count:<{uses_width}} | {saving:<{saving_width}} |")
     print(border)
     
-    print(f"\nTotal savings: {total_real_saving} bit")
+    print(f"\nTotal real savings: {final_saving} bit")
     print(f"Total original bits: {initial_bits_8} bits")
     
-    perc = (total_real_saving / initial_bits_8) * 100
+    perc = (final_saving / initial_bits_8) * 100
     print(f"Compression rate: {perc:.2f}%")
+    
+def calc_final_saving(raw_data: bytes, final_dict: dict[bytes, int], all_partitions: dict, b_unit: int) -> int:
+    n_entries = len(final_dict)
+    b_key = get_key_bits(n_entries)
+    candidates_score = dict.fromkeys(final_dict, 1)
+
+    total_bits_compressed = 0
+    current_lit_accumulated = b""
+    last_idx = 0
+
+    for match in WORD_REGEX.finditer(raw_data):
+        start, end = match.start(), match.end()
+        word = match.group()
+        
+        if start > last_idx:
+            current_lit_accumulated += raw_data[last_idx:start]
+        
+        best_part = get_best_partition(all_partitions.get(word, []), candidates_score)
+        
+        if best_part:
+            for frag in best_part:
+                if frag in final_dict:
+                    if current_lit_accumulated:
+                        total_bits_compressed += 1 + (len(current_lit_accumulated) * b_unit) + b_unit
+                        current_lit_accumulated = b""
+                    
+                    total_bits_compressed += 1 + b_key
+                else:
+                    current_lit_accumulated += frag
+        else:
+            current_lit_accumulated += word
+            
+        last_idx = end
+
+    current_lit_accumulated += raw_data[last_idx:]
+    if current_lit_accumulated:
+        total_bits_compressed += 1 + (len(current_lit_accumulated) * b_unit) + b_unit
+
+    return (len(raw_data) * 8) - total_bits_compressed
 
 def main():
     raw_data = load_binary_from_input_file()
@@ -217,9 +252,10 @@ def main():
     words = WORD_REGEX.findall(raw_data)
     word_freq, all_parts, frag_occ = build_data(words)
     
-    final_saving, final_dict = create_dict(word_freq, all_parts, frag_occ, bits_needed)
+    final_dict = create_dict(word_freq, all_parts, frag_occ, bits_needed)
     
-    print_results(final_dict, final_saving, len(raw_data), bits_needed)
+    real_saving = calc_final_saving(raw_data, final_dict, all_parts, bits_needed)
+    print_results(final_dict, real_saving, len(raw_data), bits_needed)
 
 if __name__ == "__main__":
     main()
