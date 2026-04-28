@@ -14,17 +14,17 @@ input "Are you tired?"
 print "Estimated time: 113 minutes" exit
 input "Insert user password"
 print "Operation successful"
-ifc > 60:
+if c > 60:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Access Point status Off":
 print "Check 2.5 Gbps link" exit
-ifc > 17:
+if c > 17:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 input "Insert user password"
 print "Operation successful"
-ifc > 39:
+if c > 39:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 if "Gateway status Red":
@@ -32,7 +32,7 @@ print "Check 2.5 Gbps link" exit
 else if "Path to Rivetti hut":
 input "Are you tired?"
 print "Estimated time: 155 minutes" exit
-ifc > 77:
+if c > 77:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 input "Insert user password"
@@ -50,7 +50,7 @@ print "Check Wi-Fi 6 radio" exit
 else if "Path to Sella hut":
 input "Are you tired?"
 print "Estimated time: 39 minutes" exit
-ifc > 49:
+if c > 49:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 if "Switch status Flashing Red":
@@ -62,7 +62,7 @@ input "Are you tired?"
 print "Estimated time: 110 minutes" exit
 if "Access Point status Red":
 print "Check 2.5 Gbps link" exit
-ifc > 32:
+if c > 32:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Path to Rivetti hut":
@@ -70,7 +70,7 @@ input "Are you tired?"
 print "Estimated time: 177 minutes" exit
 if "Mesh Node status Red":
 print "Check 2.5 Gbps link" exit
-ifc > 48:
+if c > 48:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Switch status Flashing Red":
@@ -94,15 +94,15 @@ print "Estimated time: 118 minutes" exit
 else if "Path to Sella hut":
 input "Are you tired?"
 print "Estimated time: 142 minutes" exit
-ifc > 83:
+if c > 83:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
-ifc > 63:
+if c > 63:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 input "Insert user password"
 print "Operation successful"
-ifc > 90:
+if c > 90:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Router status Flashing Red":
@@ -111,7 +111,7 @@ else if "Switch status Red":
 print "Check PoE Port" exit
 else if "Router status Flashing Red":
 print "Check 2.5 Gbps link" exit
-ifc > 15:
+if c > 15:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Router status Green":
@@ -121,28 +121,28 @@ input "Are you tired?"
 print "Estimated time: 122 minutes" exit
 if "Switch status Off":
 print "Check Wi-Fi 6 radio" exit
-ifc > 66:
+if c > 66:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 if "Mesh Node status Flashing Red":
 print "Check 2.5 Gbps link" exit
-ifc > 69:
+if c > 69:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
-ifc > 78:
+if c > 78:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Gateway status Blinking Green":
 print "Check Ethernet link" exit
 input "Insert user password"
 print "Operation successful"
-ifc > 51:
+if c > 51:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
-ifc > 17:
+if c > 17:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
-ifc > 79:
+if c > 79:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Path to Sella hut":
@@ -150,7 +150,7 @@ input "Are you tired?"
 print "Estimated time: 180 minutes" exit
 else if "Access Point status Blue":
 print "Check Ethernet link" exit
-ifc > 33:
+if c > 33:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Path to Sella hut":
@@ -161,15 +161,15 @@ print "Check Wi-Fi 6 radio" exit
 else if "Path to Madonna della Neve":
 input "Are you tired?"
 print "Estimated time: 158 minutes" exit
-ifc > 39:
+if c > 39:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
-ifc > 62:
+if c > 62:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Switch status Amber":
 print "Check Ethernet link" exit
-ifc > 89:
+if c > 89:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 input "Insert user password"
@@ -180,7 +180,7 @@ print "Estimated time: 164 minutes" exit
 else if "Path to Madonna della Neve":
 input "Are you tired?"
 print "Estimated time: 91 minutes" exit
-ifc > 89:
+if c > 89:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Switch status Blinking Green":
@@ -190,16 +190,16 @@ print "Check PoE Port" exit
 else if "Path to Cristallina hut":
 input "Are you tired?"
 print "Estimated time: 60 minutes" exit
-ifc > 97:
+if c > 97:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
-ifc > 99:
+if c > 99:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
-ifc > 46:
+if c > 46:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
-ifc > 53:
+if c > 53:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Path to Rivetti hut":
@@ -207,21 +207,21 @@ input "Are you tired?"
 print "Estimated time: 53 minutes" exit
 else if "Access Point status Flashing Red":
 print "Check PoE Port" exit
-ifc > 50:
+if c > 50:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 input "Insert user password"
 print "Operation successful"
-ifc > 44:
+if c > 44:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Path to Cristallina hut":
 input "Are you tired?"
 print "Estimated time: 172 minutes" exit
-ifc > 39:
+if c > 39:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
-ifc > 26:
+if c > 26:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Path to Madonna della Neve":
@@ -240,14 +240,14 @@ print "Estimated time: 136 minutes" exit
 else if "Path to Sella hut":
 input "Are you tired?"
 print "Estimated time: 62 minutes" exit
-ifc > 90:
+if c > 90:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 input "Insert user password"
 print "Operation successful"
 if "Switch status Blue":
 print "Check 2.5 Gbps link" exit
-ifc > 71:
+if c > 71:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 if "Router status Blinking Green":
@@ -264,10 +264,10 @@ print "Operation successful"
 else if "Path to Sella hut":
 input "Are you tired?"
 print "Estimated time: 147 minutes" exit
-ifc > 10:
+if c > 10:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
-ifc > 25:
+if c > 25:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 if "Switch status Amber":
@@ -284,7 +284,7 @@ print "Estimated time: 70 minutes" exit
 else if "Path to Cristallina hut":
 input "Are you tired?"
 print "Estimated time: 62 minutes" exit
-ifc > 40:
+if c > 40:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Mesh Node status Off":
@@ -301,7 +301,7 @@ print "Estimated time: 73 minutes" exit
 else if "Path to Rivetti hut":
 input "Are you tired?"
 print "Estimated time: 106 minutes" exit
-ifc > 98:
+if c > 98:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Path to Rivetti hut":
@@ -321,7 +321,7 @@ print "Check Ethernet link" exit
 else if "Path to Madonna della Neve":
 input "Are you tired?"
 print "Estimated time: 125 minutes" exit
-ifc > 72:
+if c > 72:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Path to Madonna della Neve":
@@ -336,12 +336,12 @@ input "Insert user password"
 print "Operation successful"
 else if "Router status Flashing Red":
 print "Check PoE Port" exit
-ifc > 90:
+if c > 90:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 input "Insert user password"
 print "Operation successful"
-ifc > 17:
+if c > 17:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Path to Cristallina hut":
@@ -355,7 +355,7 @@ if "Router status Blue":
 print "Check Ethernet link" exit
 else if "Access Point status Red":
 print "Check Ethernet link" exit
-ifc > 94:
+if c > 94:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Router status Green":
@@ -364,22 +364,22 @@ else if "Gateway status Flashing Red":
 print "Check 2.5 Gbps link" exit
 input "Insert user password"
 print "Operation successful"
-ifc > 99:
+if c > 99:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
-ifc > 14:
+if c > 14:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
-ifc > 10:
+if c > 10:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
-ifc > 14:
+if c > 14:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
-ifc > 78:
+if c > 78:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
-ifc > 63:
+if c > 63:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Path to Madonna della Neve":
@@ -388,17 +388,17 @@ print "Estimated time: 66 minutes" exit
 else if "Path to Madonna della Neve":
 input "Are you tired?"
 print "Estimated time: 43 minutes" exit
-ifc > 81:
+if c > 81:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 if "Gateway status Off":
 print "Check Ethernet link" exit
 input "Insert user password"
 print "Operation successful"
-ifc > 18:
+if c > 18:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
-ifc > 57:
+if c > 57:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Mesh Node status Blinking Green":
@@ -407,7 +407,7 @@ input "Insert user password"
 print "Operation successful"
 else if "Mesh Node status Amber":
 print "Check Ethernet link" exit
-ifc > 29:
+if c > 29:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Path to Cristallina hut":
@@ -439,13 +439,13 @@ if "Gateway status Red":
 print "Check Ethernet link" exit
 input "Insert user password"
 print "Operation successful"
-ifc > 60:
+if c > 60:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Path to Madonna della Neve":
 input "Are you tired?"
 print "Estimated time: 149 minutes" exit
-ifc > 62:
+if c > 62:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 if "Gateway status Off":
@@ -453,7 +453,7 @@ print "Check PoE Port" exit
 else if "Path to Sella hut":
 input "Are you tired?"
 print "Estimated time: 151 minutes" exit
-ifc > 54:
+if c > 54:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 input "Insert user password"
@@ -461,16 +461,16 @@ print "Operation successful"
 else if "Path to Rivetti hut":
 input "Are you tired?"
 print "Estimated time: 157 minutes" exit
-ifc > 62:
+if c > 62:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Path to Madonna della Neve":
 input "Are you tired?"
 print "Estimated time: 39 minutes" exit
-ifc > 14:
+if c > 14:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
-ifc > 95:
+if c > 95:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Path to Sella hut":
@@ -482,7 +482,7 @@ print "Estimated time: 164 minutes" exit
 else if "Path to Cristallina hut":
 input "Are you tired?"
 print "Estimated time: 83 minutes" exit
-ifc > 73:
+if c > 73:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Path to Madonna della Neve":
@@ -493,25 +493,25 @@ input "Are you tired?"
 print "Estimated time: 145 minutes" exit
 if "Mesh Node status Green":
 print "Check 2.5 Gbps link" exit
-ifc > 21:
+if c > 21:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 if "Switch status Flashing Red":
 print "Check Wi-Fi 6 radio" exit
-ifc > 53:
+if c > 53:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
-ifc > 95:
-print "Alert: heart rate too high!"
-print "Call ambulance and prepare defibrillator" exit
-input "Insert user password"
-print "Operation successful"
-ifc > 13:
+if c > 95:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 input "Insert user password"
 print "Operation successful"
-ifc > 18:
+if c > 13:
+print "Alert: heart rate too high!"
+print "Call ambulance and prepare defibrillator" exit
+input "Insert user password"
+print "Operation successful"
+if c > 18:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Path to Madonna della Neve":
@@ -529,14 +529,14 @@ print "Check Ethernet link" exit
 else if "Path to Rivetti hut":
 input "Are you tired?"
 print "Estimated time: 63 minutes" exit
-ifc > 30:
+if c > 30:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 if "Router status Blue":
 print "Check PoE Port" exit
 else if "Mesh Node status Blue":
 print "Check 2.5 Gbps link" exit
-ifc > 60:
+if c > 60:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Path to Cristallina hut":
@@ -544,15 +544,15 @@ input "Are you tired?"
 print "Estimated time: 134 minutes" exit
 else if "Gateway status Blue":
 print "Check PoE Port" exit
-ifc > 59:
+if c > 59:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Gateway status Amber":
 print "Check Wi-Fi 6 radio" exit
-ifc > 19:
+if c > 19:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
-ifc > 91:
+if c > 91:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Path to Sella hut":
@@ -560,7 +560,7 @@ input "Are you tired?"
 print "Estimated time: 103 minutes" exit
 input "Insert user password"
 print "Operation successful"
-ifc > 89:
+if c > 89:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 if "Router status Blinking Green":
@@ -577,7 +577,7 @@ print "Operation successful"
 else if "Path to Madonna della Neve":
 input "Are you tired?"
 print "Estimated time: 127 minutes" exit
-ifc > 45:
+if c > 45:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 input "Insert user password"
@@ -589,7 +589,7 @@ if "Switch status Amber":
 print "Check Wi-Fi 6 radio" exit
 if "Router status Off":
 print "Check 2.5 Gbps link" exit
-ifc > 89:
+if c > 89:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Path to Sella hut":
@@ -613,18 +613,18 @@ input "Are you tired?"
 print "Estimated time: 42 minutes" exit
 input "Insert user password"
 print "Operation successful"
-ifc > 55:
+if c > 55:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Path to Rivetti hut":
 input "Are you tired?"
 print "Estimated time: 164 minutes" exit
-ifc > 11:
+if c > 11:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Access Point status Flashing Red":
 print "Check PoE Port" exit
-ifc > 73:
+if c > 73:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Path to Rivetti hut":
@@ -647,7 +647,7 @@ else if "Access Point status Blue":
 print "Check Wi-Fi 6 radio" exit
 else if "Mesh Node status Blinking Green":
 print "Check 2.5 Gbps link" exit
-ifc > 20:
+if c > 20:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 if "Switch status Off":
@@ -655,7 +655,7 @@ print "Check Wi-Fi 6 radio" exit
 else if "Path to Madonna della Neve":
 input "Are you tired?"
 print "Estimated time: 116 minutes" exit
-ifc > 29:
+if c > 29:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 input "Insert user password"
@@ -666,12 +666,12 @@ input "Insert user password"
 print "Operation successful"
 else if "Gateway status Red":
 print "Check Ethernet link" exit
-ifc > 68:
+if c > 68:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Mesh Node status Off":
 print "Check Ethernet link" exit
-ifc > 41:
+if c > 41:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Path to Rivetti hut":
@@ -686,10 +686,10 @@ input "Are you tired?"
 print "Estimated time: 65 minutes" exit
 else if "Router status Red":
 print "Check Wi-Fi 6 radio" exit
-ifc > 58:
+if c > 58:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
-ifc > 46:
+if c > 46:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 if "Mesh Node status Flashing Red":
@@ -700,23 +700,23 @@ input "Insert user password"
 print "Operation successful"
 if "Mesh Node status Flashing Red":
 print "Check PoE Port" exit
-ifc > 96:
+if c > 96:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Access Point status Red":
 print "Check PoE Port" exit
-ifc > 25:
+if c > 25:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
-ifc > 54:
+if c > 54:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Mesh Node status Red":
 print "Check PoE Port" exit
-ifc > 43:
+if c > 43:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
-ifc > 51:
+if c > 51:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 if "Gateway status Blue":
@@ -726,7 +726,7 @@ input "Are you tired?"
 print "Estimated time: 149 minutes" exit
 if "Mesh Node status Blue":
 print "Check Wi-Fi 6 radio" exit
-ifc > 50:
+if c > 50:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Access Point status Flashing Red":
@@ -738,14 +738,14 @@ print "Check PoE Port" exit
 else if "Path to Madonna della Neve":
 input "Are you tired?"
 print "Estimated time: 76 minutes" exit
-ifc > 72:
+if c > 72:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Router status Red":
 print "Check PoE Port" exit
 if "Gateway status Green":
 print "Check Wi-Fi 6 radio" exit
-ifc > 15:
+if c > 15:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Path to Sella hut":
@@ -755,7 +755,7 @@ if "Access Point status Amber":
 print "Check 2.5 Gbps link" exit
 else if "Switch status Green":
 print "Check Ethernet link" exit
-ifc > 25:
+if c > 25:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Path to Sella hut":
@@ -764,10 +764,10 @@ print "Estimated time: 171 minutes" exit
 else if "Path to Sella hut":
 input "Are you tired?"
 print "Estimated time: 70 minutes" exit
-ifc > 55:
+if c > 55:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
-ifc > 86:
+if c > 86:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Path to Madonna della Neve":
@@ -780,7 +780,7 @@ if "Switch status Amber":
 print "Check Ethernet link" exit
 input "Insert user password"
 print "Operation successful"
-ifc > 83:
+if c > 83:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 if "Gateway status Blinking Green":
@@ -794,12 +794,12 @@ input "Are you tired?"
 print "Estimated time: 63 minutes" exit
 input "Insert user password"
 print "Operation successful"
-ifc > 43:
+if c > 43:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 input "Insert user password"
 print "Operation successful"
-ifc > 21:
+if c > 21:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Path to Rivetti hut":
@@ -821,7 +821,7 @@ print "Check Wi-Fi 6 radio" exit
 else if "Path to Madonna della Neve":
 input "Are you tired?"
 print "Estimated time: 109 minutes" exit
-ifc > 77:
+if c > 77:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Path to Madonna della Neve":
@@ -830,7 +830,7 @@ print "Estimated time: 157 minutes" exit
 else if "Path to Cristallina hut":
 input "Are you tired?"
 print "Estimated time: 116 minutes" exit
-ifc > 68:
+if c > 68:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 if "Router status Blinking Green":
@@ -838,7 +838,7 @@ print "Check Wi-Fi 6 radio" exit
 else if "Path to Sella hut":
 input "Are you tired?"
 print "Estimated time: 124 minutes" exit
-ifc > 97:
+if c > 97:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 if "Access Point status Amber":
@@ -865,10 +865,10 @@ else if "Gateway status Amber":
 print "Check Wi-Fi 6 radio" exit
 else if "Gateway status Blue":
 print "Check Wi-Fi 6 radio" exit
-ifc > 58:
+if c > 58:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
-ifc > 15:
+if c > 15:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Path to Sella hut":
@@ -881,19 +881,19 @@ print "Check Wi-Fi 6 radio" exit
 else if "Path to Rivetti hut":
 input "Are you tired?"
 print "Estimated time: 123 minutes" exit
-ifc > 58:
+if c > 58:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Path to Madonna della Neve":
 input "Are you tired?"
 print "Estimated time: 80 minutes" exit
-ifc > 58:
+if c > 58:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Path to Sella hut":
 input "Are you tired?"
 print "Estimated time: 98 minutes" exit
-ifc > 31:
+if c > 31:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Router status Blue":
@@ -903,25 +903,25 @@ print "Check PoE Port" exit
 else if "Path to Rivetti hut":
 input "Are you tired?"
 print "Estimated time: 59 minutes" exit
-ifc > 36:
+if c > 36:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Router status Flashing Red":
 print "Check Wi-Fi 6 radio" exit
 if "Router status Blinking Green":
 print "Check Ethernet link" exit
-ifc > 17:
+if c > 17:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
-ifc > 32:
+if c > 32:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 input "Insert user password"
 print "Operation successful"
-ifc > 26:
+if c > 26:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
-ifc > 26:
+if c > 26:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 input "Insert user password"
@@ -934,42 +934,42 @@ print "Estimated time: 118 minutes" exit
 else if "Path to Sella hut":
 input "Are you tired?"
 print "Estimated time: 64 minutes" exit
-ifc > 30:
+if c > 30:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 input "Insert user password"
 print "Operation successful"
-ifc > 14:
+if c > 14:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
-ifc > 18:
+if c > 18:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 input "Insert user password"
 print "Operation successful"
 if "Mesh Node status Off":
 print "Check 2.5 Gbps link" exit
-ifc > 21:
+if c > 21:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
-ifc > 28:
+if c > 28:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Path to Cristallina hut":
 input "Are you tired?"
 print "Estimated time: 162 minutes" exit
-ifc > 22:
+if c > 22:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
-ifc > 16:
+if c > 16:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 if "Access Point status Off":
 print "Check Wi-Fi 6 radio" exit
-ifc > 11:
+if c > 11:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
-ifc > 18:
+if c > 18:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Path to Sella hut":
@@ -978,7 +978,7 @@ print "Estimated time: 176 minutes" exit
 else if "Path to Sella hut":
 input "Are you tired?"
 print "Estimated time: 64 minutes" exit
-ifc > 83:
+if c > 83:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 if "Gateway status Off":
@@ -986,13 +986,13 @@ print "Check 2.5 Gbps link" exit
 else if "Path to Sella hut":
 input "Are you tired?"
 print "Estimated time: 161 minutes" exit
-ifc > 71:
+if c > 71:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
-ifc > 50:
+if c > 50:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
-ifc > 42:
+if c > 42:
 print "Alert: heart rate too high!"
 print "Call ambulance and prepare defibrillator" exit
 else if "Path to Cristallina hut":

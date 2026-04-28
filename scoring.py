@@ -78,7 +78,7 @@ def calculate_u_di(fragment: bytes, count: int, b_key: int, b_unit: int) -> int:
     l_bits = len(fragment) * b_unit
 
     saving = count * l_bits
-    storage_cost = l_bits + b_unit # here, b_unit = B_ETX; since i use a optimized encoding for chars, B_TYPE is now useless
+    storage_cost = l_bits + b_unit # b_unit = B_ETX; since an optimized encoding for chars is used, B_TYPE is now useless
     pointer_cost = count * (B_FLAG + b_key)
 
     return saving - storage_cost - pointer_cost
@@ -98,63 +98,45 @@ def get_best_partition(partitions: list[list[bytes]], candidate_scores: dict[byt
                 
     return best_partition
 
-def normalize_dictionary(usage_counts: dict[bytes, int], b_unit: int) -> tuple[int, dict[bytes, int], int]:
-    """Iteratively prune non-profitable entries until the dictionary stabilizes."""
-
-    current = usage_counts
-    while True:
-        if not current:
-            return 1, {}, 0
-
-        b_key = get_key_bits(len(current))
-        filtered = {
-            fragment: occ
-            for fragment, occ in current.items()
-            if calculate_u_di(fragment, occ, b_key, b_unit) > 0
-        }
-
-        if len(filtered) == len(current):
-            total_saving = sum(calculate_u_di(fragment, occ, b_key, b_unit) for fragment, occ in filtered.items())
-            return b_key, filtered, total_saving
-
-        current = filtered
-
 def create_dict(word_frequencies: Counter[bytes], all_partitions: dict[bytes, list[list[bytes]]], fragment_occurrences: dict[bytes, dict[bytes, int]], b_unit: int) -> tuple[int, dict[bytes, int]]:
     """Run the optimization loop to stabilize key width and dictionary entries, in order to create the final dict."""
 
-    b_key = get_key_bits(len(word_frequencies))
     best_saving = -1
     best_dict = {}
-    substring_counts = aggregate_substring_counts(word_frequencies, fragment_occurrences)
+    current_candidates = aggregate_substring_counts(word_frequencies, fragment_occurrences)
 
     while True:
-        candidates = {
+        b_key = get_key_bits(len(current_candidates))
+        
+        candidates_score = {
             sub: score
-            for sub, occ in substring_counts.items()
+            for sub, occ in current_candidates.items()
             if (score := calculate_u_di(sub, occ, b_key, b_unit)) > 0
         }
 
-        if not candidates:
+        if not candidates_score:
             break
 
-        real_usage: dict[bytes, int] = {}
+        current_dict = {}
         for word, freq in word_frequencies.items():
-            best_partition = get_best_partition(all_partitions[word], candidates)
+            best_part = get_best_partition(all_partitions[word], candidates_score)
             
-            if best_partition is None:
-                continue
+            if best_part:
+                for frag in best_part:
+                    if frag in candidates_score:
+                        current_dict[frag] = current_dict.get(frag, 0) + freq
+                        
+        current_saving = sum(calculate_u_di(f, occ, get_key_bits(len(current_dict)), b_unit) for f, occ in current_dict.items())
+        
+        current_key = get_key_bits(len(current_dict))
+        print(f"Saving: {current_saving} | Key bits: {current_key} | Entries: {len(current_dict)}")
 
-            for fragment in best_partition:
-                if fragment in candidates:
-                    real_usage[fragment] = real_usage.get(fragment, 0) + freq
-
-        eff_key, final_usage, saving = normalize_dictionary(dict(real_usage), b_unit)
-        print(f"Saving: {saving} | Key: {eff_key} | Entries: {len(final_usage)}")
-
-        if not final_usage or saving < best_saving or (saving == best_saving and eff_key > b_key) or (saving == best_saving and eff_key == b_key and len(final_usage) >= len(best_dict)):
+        if not current_dict or current_saving < best_saving or (current_saving == best_saving and current_key > b_key) or (current_saving == best_saving and current_key == b_key and len(current_dict) >= len(best_dict)):
             break
 
-        best_saving, best_dict, b_key = saving, final_usage, eff_key
+        best_saving = current_saving
+        best_dict = current_dict
+        current_candidates = current_dict
 
     return best_saving, best_dict
 
@@ -163,7 +145,7 @@ def print_results(final_dict: dict[bytes, int], total_saving: int, raw_data_len:
     effective_b_key = get_key_bits(n_entries)
     
     # to specify how many bits for the single char
-    # 11110 -> 4 bits
+    # 11110 -> 4 bits (0 = escape bit)
     unary_overhead = b_unit + 1
     
     protocol_prefix = 6 
