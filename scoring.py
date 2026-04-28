@@ -111,7 +111,7 @@ def get_best_partition(partitions: list[list[bytes]], candidate_scores: dict[byt
     return best_partition
 
 def create_dict(word_frequencies: Counter[bytes], all_partitions: dict[bytes, list[list[bytes]]], fragment_occurrences: dict[bytes, dict[bytes, int]], b_unit: int) -> dict[bytes, int]:
-    """Run the optimization loop to stabilize key width and dictionary entries, in order to create the final dict."""
+    """Run the loop to create the final dict, trying to maximize the total saved bits."""
 
     best_saving = -1
     best_dict = {}
