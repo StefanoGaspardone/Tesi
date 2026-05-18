@@ -4,11 +4,9 @@ import sys
 B_FLAG = 1
 B_CHAR = 8
 
-def load_input_file() -> bytes:
+def load_input_file(filename: str) -> bytes:
     try:
-        file_name = sys.argv[1] if len(sys.argv) > 1 else input("Enter file name: ")
-
-        with open(f"inputs/{file_name}", "rb") as file:
+        with open(f"inputs/{filename}", "rb") as file:
             return file.read()
     except FileNotFoundError:
         print("The file does not exist")
@@ -126,7 +124,8 @@ def print_stats(strings: list[bytes]):
     print(f"> {"{:.3e}".format(combination)} combinations\n\n")
 
 def main():
-    data = load_input_file()
+    filename = sys.argv[1] if len(sys.argv) > 1 else input("Enter file name: ")
+    data = load_input_file(filename)
     
     strings = get_strings(data)
     print_stats(strings)
