@@ -89,4 +89,26 @@ $RECYCLE.BIN/
 *.swo
 *~
 
+# Algoritmi - Ignora la cartella degli output
 outputs/
+algorithms/outputs/
+
+# LaTeX (per la cartella thesis)
+*.aux
+*.bbl
+*.blg
+*.brf
+*.bcf
+*.idx
+*.ilg
+*.ind
+*.lof
+*.lot
+*.nav
+*.out
+*.snm
+*.toc
+*.run.xml
+*.synctex.gz
+*.fls
+*.fdb_latexmk
