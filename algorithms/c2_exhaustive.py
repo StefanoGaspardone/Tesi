@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
-# exhaustive
+# c2 exhaustive
 
 import argparse
 import ast
 import math
 import heapq
-import re
 import time
 import logging
-import os
-import itertools
 from datetime import datetime
 from collections import defaultdict
+from pathlib import Path
+from typing import Any
 
 MAGIC = b"SDB1"
 VERSION = 1
@@ -35,20 +34,28 @@ ENC_NAME = {
 # Logger
 # ---------------------------
 def setup_logger(input_filename):
-    os.makedirs('logs', exist_ok = True)
+    script_dir = Path(__file__).resolve().parent
+    
+    logs_dir = script_dir / "logs"
+    logs_dir.mkdir(parents = True, exist_ok = True)
     
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    script_name = os.path.splitext(os.path.basename(__file__))[0]
-    base_input = os.path.splitext(os.path.basename(input_filename))[0]
-    log_filename = f"logs/{script_name}_{timestamp}_{base_input}.log"
+    script_name = Path(__file__).stem
+    base_input = Path(input_filename).stem
+    
+    log_filename = logs_dir / f"{script_name}_{timestamp}_{base_input}.log"
+    
+    root_logger = logging.getLogger()
+    for handler in root_logger.handlers[:]:
+        root_logger.removeHandler(handler)
     
     logging.basicConfig(
         level = logging.INFO,
         format = "%(message)s",
         handlers = [
-            logging.FileHandler(log_filename, encoding = 'utf-8'),
+            logging.FileHandler(log_filename, encoding = "utf-8"),
             logging.StreamHandler(),
-        ]
+        ],
     )
 
 # ---------------------------
@@ -165,9 +172,10 @@ def huffman_lengths(freq_map: dict) -> dict:
         return {next(iter(freq_map)): 1}
     
     heap = [[f, i, [s]] for i, (s, f) in enumerate(sorted(freq_map.items()))]
+    heapq.heapify(heap)
+    
     lengths = dict.fromkeys(freq_map, 0)
     tie = len(heap)
-    heapq.heapify(heap)
     
     while len(heap) > 1:
         f1, _, s1 = heapq.heappop(heap)
@@ -185,6 +193,7 @@ def huffman_lengths(freq_map: dict) -> dict:
 
 def canonical_codes(lengths: dict) -> dict:
     syms = sorted(lengths.keys(), key = lambda s: (lengths[s], s))
+    
     codes = {}
     code = 0
     prev = 0
@@ -237,7 +246,6 @@ def elias_length(i: int) -> int:
 def elias_write(bw: BitWriter, i: int):
     n = i + 1
     k = n.bit_length() - 1
-    
     bw.write_bits(n, 2 * k + 1)
 
 def elias_read(br: BitReader) -> int:
@@ -340,7 +348,6 @@ def _huffman_freq_write_overhead(bw: BitWriter, freqs: dict, count: int):
 def _huffman_freq_read_overhead(br: BitReader, count: int) -> dict:
     freq_bytes = br.read_bytes_aligned(count)
     norm = {i: freq_bytes[i] for i in range(count)}
-    
     return huffman_lengths(norm)
 
 def _huffman_freq_overhead_bits(count: int) -> int:
@@ -380,9 +387,7 @@ POSITIONAL_CODEC = {
     'char_lengths': lambda alphabet, char_freqs: {i: elias_length(i) for i in range(len(alphabet))},
     'token_lengths': lambda tok_freqs, D: {
         tok_id: elias_length(rank)
-        for rank, tok_id in enumerate(
-            sorted(range(D), key = lambda i: tok_freqs.get(i, 0), reverse = True)
-        )
+        for rank, tok_id in enumerate(sorted(range(D), key = lambda i: tok_freqs.get(i, 0), reverse = True))
     } if D > 0 else {},
     'write_symbol': _positional_write_symbol,
     'read_symbol': _positional_read_symbol,
@@ -489,6 +494,7 @@ def read_alphabet_section(data: bytes, pos: int, encoding: int) -> tuple:
     br_tmp = BitReader(data, pos)
     lengths = codec['read_overhead'](br_tmp, A)
     pos = br_tmp.pos
+    
     decoder = codec['decoder_from_lengths'](lengths, A)
     
     return alphabet, decoder, pos
@@ -573,71 +579,6 @@ def read_stream(br: BitReader, alphabet: bytes, dictionary: list, encoding: int,
     return out_strings
 
 # ---------------------------
-# Split stringhe (separatori)
-# ---------------------------
-def split_strings(strings: list[bytes]) -> tuple[list[bytes], dict[bytes, int]]:
-    char_map = {}
-    
-    for s in strings:
-        for i in range(len(s)):
-            char = s[i : i + 1]
-            
-            if char not in char_map:
-                char_map[char] = {'pre': [], 'post': [], 'count': 0}
-            
-            char_map[char]['count'] += 1
-            
-            if i > 0:
-                char_map[char]['pre'].append(s[i - 1])
-            if i < len(s) - 1:
-                char_map[char]['post'].append(s[i + 1])
-    
-    separators = []
-    final_dict = {}
-    
-    for char, data in char_map.items():
-        pre_unique  = len(set(data['pre']))  == len(data['pre'])
-        post_unique = len(set(data['post'])) == len(data['post'])
-        
-        if pre_unique and post_unique:
-            separators.append(char)
-            final_dict[char] = data['count']
-    
-    if not separators:
-        return strings, {}
-    
-    regex = b'|'.join(map(re.escape, separators))
-    new_strings = []
-    
-    for s in strings:
-        for p in re.split(regex, s):
-            if p:
-                new_strings.append(p)
-    
-    return new_strings, final_dict
-
-# ---------------------------
-# Partizioni
-# ---------------------------
-def get_partitions(s: bytes) -> list:
-    n = len(s)
-    result = []
-    
-    for mask in range(1 << (n - 1)):
-        partition = []
-        start = 0
-        
-        for j in range(n - 1):
-            if (mask >> j) & 1:
-                partition.append(s[start : j + 1])
-                start = j + 1
-        
-        partition.append(s[start:])
-        result.append(partition)
-    
-    return result
-
-# ---------------------------
 # Scoring
 # ---------------------------
 def count_tok_freqs(seqs: list) -> dict:
@@ -650,152 +591,262 @@ def count_tok_freqs(seqs: list) -> dict:
     
     return tok_freqs
 
+def score_dictionary_bits(dictionary: list, seqs: list, char_bit_lengths: dict, encoding: int) -> int:
+    D = len(dictionary)
+    codec = CODECS[encoding]
+    
+    tok_freqs = count_tok_freqs(seqs)
+    tok_bits = codec['token_lengths'](tok_freqs, D)
+    
+    dict_bits = codec['overhead_bits'](D)
+    for entry in dictionary:
+        dict_bits += varint_size(len(entry)) * 8
+        dict_bits += sum(char_bit_lengths[b] for b in entry)
+    
+    stream_bits = 0
+    for seq in seqs:
+        stream_bits += varint_size(len(seq)) * 8
+        
+        for typ, val in seq:
+            stream_bits += 1
+            stream_bits += char_bit_lengths[val] if typ == RAW else tok_bits[val]
+    
+    return dict_bits + stream_bits
+
+def token_bits_for_candidate(codec: dict, tok_freqs: dict, d: int, occ: int) -> int:
+    combined = dict(tok_freqs)
+    combined[d] = occ
+    
+    return codec['token_lengths'](combined, d + 1)[d]
+
 def scoring_function(pat_bytes: bytes, occ: int, char_bit_lengths: dict, token_bits_after: int) -> float:
     L = len(pat_bytes)
     pat_bits = sum(char_bit_lengths[b] for b in pat_bytes)
     
-    old_cost = occ * (L + pat_bits)
-    new_cost = occ * (1 + token_bits_after)
+    old_cost  = occ * (L + pat_bits)
+    new_cost  = occ * (1 + token_bits_after)
     dict_cost = (varint_size(L) * 8) + pat_bits
     
     return old_cost - new_cost - dict_cost
 
 # ---------------------------
-# Build dictionary (esaustivo su partizioni)
+# Dictionary build
 # ---------------------------
-def build_dictionary(byte_strings: list, char_bit_lengths: dict, encoding: int, init_dict: list | None = None, init_freqs: dict | None = None) -> list | None:
-    codec = CODECS[encoding]
-    base_dict = list(init_dict)  if init_dict  else []
-    base_freqs = dict(init_freqs) if init_freqs else {}
-    base_set = set(base_dict)
-    
-    all_partitions = [get_partitions(s) for s in byte_strings]
-    
-    n_combinations = 1
-    for parts in all_partitions:
-        n_combinations *= len(parts)
-    
-    logging.info(f"Sottosequenze: {len(byte_strings)}, combinazioni: {n_combinations:,}")
-    
-    best_score = None
-    best_combination = None
-    
-    for combination in itertools.product(*all_partitions):
-        all_fragments = []
-        for partition in combination:
-            all_fragments.extend(partition)
-        
-        frag_counts = defaultdict(int)
-        for frag in all_fragments:
-            if frag not in base_set:
-                frag_counts[frag] += 1
-        
-        frags = list(frag_counts.keys())
-        total_size = len(base_dict) + len(frags)
-        
-        pool_freqs = {}
-        
-        for i, sep in enumerate(base_dict):
-            pool_freqs[i] = base_freqs.get(sep, 1)
-        
-        for j, frag in enumerate(frags):
-            pool_freqs[len(base_dict) + j] = frag_counts[frag]
-        
-        tok_bits_by_id = codec['token_lengths'](pool_freqs, total_size)
-        
-        score = sum(
-            scoring_function(frags[j], frag_counts[frags[j]], char_bit_lengths, tok_bits_by_id[len(base_dict) + j])
-            for j in range(len(frags))
-        )
-        
-        if best_score is None or score > best_score:
-            best_score = score
-            best_combination = all_fragments
-    
-    if best_combination is None:
-        return base_dict if base_dict else None
-    
-    final_counts = defaultdict(int)
-    for frag in best_combination:
-        if frag not in base_set:
-            final_counts[frag] += 1
-    
-    return base_dict + list(final_counts.keys())
+def initial_sequences(byte_strings: list) -> list:
+    return [[(RAW, x) for x in bs] for bs in byte_strings]
 
-# ---------------------------
-# Tokenizzazione
-# ---------------------------
-def _tokenize(s: bytes, dictionary: list) -> list:
-    seq = []
-    i = 0
+def find_candidates(seqs: list, min_len: int = 2, max_len: int = 32) -> dict:
+    counts = defaultdict(int)
     
-    while i < len(s):
-        best_len = 0
-        best_id  = -1
+    for seq in seqs:
+        n = len(seq)
         
-        for tok_id, frag in enumerate(dictionary):
-            L = len(frag)
+        for i in range(n):
+            if seq[i][0] != RAW:
+                continue
             
-            if s[i : i + L] == frag and L > best_len:
-                best_len = L
-                best_id = tok_id
-        
-        if best_id >= 0:
-            seq.append((TOK, best_id))
-            i += best_len
+            acc = []
+            for j in range(i, min(n, i + max_len)):
+                if seq[j][0] != RAW:
+                    break
+                
+                acc.append(seq[j][1])
+                
+                if len(acc) >= min_len:
+                    counts[bytes(acc)] += 1
+    
+    return {k: v for k, v in counts.items() if v >= 2}
+
+def count_non_overlapping(seq: list, pat_bytes: bytes) -> int:
+    pat = [(RAW, b) for b in pat_bytes]
+    m = len(pat)
+    i = 0
+    c = 0
+    
+    while i <= len(seq) - m:
+        if seq[i : i + m] == pat:
+            c += 1
+            i += m
         else:
-            seq.append((RAW, s[i]))
             i += 1
     
-    return seq
+    return c
 
-def _rebuild_original_seqs(byte_strings: list, subseqs: list, sep_freqs: dict, dictionary: list, sep_in_dict: bool) -> list:
-    separators = list(sep_freqs.keys())
+def total_non_overlapping(seqs: list, pat_bytes: bytes) -> int:
+    return sum(count_non_overlapping(seq, pat_bytes) for seq in seqs)
+
+def replace_non_overlapping(seqs: list, pat_bytes: bytes, token_id: int) -> list:
+    pat = [(RAW, b) for b in pat_bytes]
+    m = len(pat)
+    token = (TOK, token_id)
     
-    if not separators or sep_in_dict:
-        return [_tokenize(s, dictionary) for s in byte_strings]
+    out_all = []
     
-    seqs = []
-    subseq_iter = iter(subseqs)
-    
-    for orig in byte_strings:
-        seq = []
-        i = 0
-        current_subseq_bytes = bytearray()
+    for seq in seqs:
+        out = []
+        i   = 0
         
-        while i < len(orig):
-            matched_sep = None
-            
-            for sep in separators:
-                if orig[i : i + len(sep)] == sep:
-                    matched_sep = sep
-                    break
-            
-            if matched_sep is not None:
-                if current_subseq_bytes:
-                    sub = next(subseq_iter)
-                    seq.extend(_tokenize(sub, dictionary))
-                    current_subseq_bytes = bytearray()
-                
-                for bv in matched_sep:
-                    seq.append((RAW, bv))
-                
-                i += len(matched_sep)
+        while i < len(seq):
+            if i <= len(seq) - m and seq[i : i + m] == pat:
+                out.append(token)
+                i += m
             else:
-                current_subseq_bytes.append(orig[i])
+                out.append(seq[i])
                 i += 1
         
-        if current_subseq_bytes:
-            sub = next(subseq_iter)
-            seq.extend(_tokenize(sub, dictionary))
-        
-        seqs.append(seq)
+        out_all.append(out)
     
-    return seqs
+    return out_all
+
+def greedy_build(byte_strings: list, char_bit_lengths: dict, encoding: int, min_len: int = 2, max_len: int = 32, max_dict: int = 1023, init_dict: list | None = None, init_seqs: list | None = None) -> tuple:
+    seqs = init_seqs[:] if init_seqs is not None else initial_sequences(byte_strings)
+    dictionary = list(init_dict) if init_dict is not None else []
+    codec = CODECS[encoding]
+    
+    current_bits = score_dictionary_bits(dictionary, seqs, char_bit_lengths, encoding)
+    
+    while len(dictionary) < max_dict:
+        D = len(dictionary)
+        tok_freqs = count_tok_freqs(seqs)
+        candidates = find_candidates(seqs, min_len, max_len)
+        
+        best = None
+        best_gain = 0
+        
+        for pat in candidates:
+            occ = total_non_overlapping(seqs, pat)
+            if occ < 2:
+                continue
+            
+            token_bits_after = token_bits_for_candidate(codec, tok_freqs, D, occ)
+            gain = scoring_function(pat, occ, char_bit_lengths, token_bits_after)
+            
+            if gain > best_gain:
+                best_gain = gain
+                best = pat
+        
+        if best is None or best_gain <= 0:
+            break
+        
+        trial_dict = dictionary + [best]
+        trial_seqs = replace_non_overlapping(seqs, best, D)
+        trial_bits = score_dictionary_bits(trial_dict, trial_seqs, char_bit_lengths, encoding)
+        
+        if trial_bits >= current_bits:
+            break
+        
+        dictionary = trial_dict
+        seqs = trial_seqs
+        current_bits = trial_bits
+    
+    return dictionary, seqs
+
+# ---------------------------
+# DFS Branch & Bound
+# ---------------------------
+def exhaustive_build(byte_strings: list, char_bit_lengths: dict, encoding: int, min_len: int = 2, max_len: int = 32, max_dict: int = 1023, max_depth: int | None = None) -> tuple:
+    if max_depth == 0:
+        return greedy_build(byte_strings, char_bit_lengths, encoding, min_len, max_len, max_dict)
+    
+    init_seqs = initial_sequences(byte_strings)
+    codec = CODECS[encoding]
+    
+    memo: dict = {}
+    stats = {'nodes': 0, 'pruned_bb': 0, 'memo_hits': 0}
+    
+    def state_key(dct: list, sqs: list) -> tuple:
+        return (tuple(dct), tuple(tuple(seq) for seq in sqs))
+    
+    def compute_ub_gain(candidates: dict, sqs: list) -> float:
+        total = 0.0
+        
+        for pat in candidates:
+            occ  = total_non_overlapping(sqs, pat)
+            gain = scoring_function(pat, occ, char_bit_lengths, 1)
+            
+            if gain > 0:
+                total += gain
+        
+        return total
+    
+    def dfs(dct: list, sqs: list, current_bits: int, depth: int) -> tuple:
+        stats['nodes'] += 1
+        
+        key = state_key(dct, sqs)
+        if key in memo:
+            stats['memo_hits'] += 1
+            return memo[key]
+        
+        base_dct, base_sqs = greedy_build(byte_strings, char_bit_lengths, encoding, min_len, max_len, max_dict, init_dict = list(dct), init_seqs = list(sqs))
+        base_bits = score_dictionary_bits(base_dct, base_sqs, char_bit_lengths, encoding)
+        best_local = (base_bits, list(base_dct), base_sqs)
+        
+        if len(dct) >= max_dict:
+            memo[key] = best_local
+            return best_local
+        
+        if max_depth is not None and depth >= max_depth:
+            memo[key] = best_local
+            return best_local
+        
+        candidates = find_candidates(sqs, min_len, max_len)
+        
+        if not candidates:
+            memo[key] = best_local
+            return best_local
+        
+        ub_gain_bits = compute_ub_gain(candidates, sqs)
+        
+        if current_bits - ub_gain_bits >= base_bits:
+            stats['pruned_bb'] += 1
+            memo[key] = best_local
+            return best_local
+        
+        D = len(dct)
+        tok_freqs = count_tok_freqs(sqs)
+        scored = []
+        
+        for pat in candidates:
+            occ = total_non_overlapping(sqs, pat)
+            if occ < 2:
+                continue
+            
+            token_bits_after = token_bits_for_candidate(codec, tok_freqs, D, occ)
+            gain = scoring_function(pat, occ, char_bit_lengths, token_bits_after)
+            
+            if gain > 0:
+                scored.append((gain, pat))
+        
+        if not scored:
+            memo[key] = best_local
+            return best_local
+        
+        scored.sort(key = lambda x: x[0], reverse = True)
+        
+        for _, pat in scored:
+            new_dct = list(dct) + [pat]
+            new_sqs = replace_non_overlapping(sqs, pat, D)
+            new_bits = score_dictionary_bits(new_dct, new_sqs, char_bit_lengths, encoding)
+            
+            cand_bits, cand_dct, cand_sqs = dfs(new_dct, new_sqs, new_bits, depth + 1)
+            
+            if cand_bits < best_local[0]:
+                best_local = (cand_bits, cand_dct, cand_sqs)
+        
+        memo[key] = best_local
+        return best_local
+    
+    init_bits = score_dictionary_bits([], init_seqs, char_bit_lengths, encoding)
+    _best_bits, best_dict, best_seqs = dfs([], init_seqs, init_bits, 0)
+    
+    logging.info(f"DFS: nodi={stats['nodes']}, potati={stats['pruned_bb']}, memo_hits={stats['memo_hits']}")
+    
+    return best_dict, best_seqs
 
 def _reorder_dict_for_positional(dictionary: list, seqs: list) -> tuple:
     D = len(dictionary)
     tok_freqs = count_tok_freqs(seqs)
+    
     old_order = sorted(range(D), key = lambda i: tok_freqs.get(i, 0), reverse = True)
     new_dict = [dictionary[i] for i in old_order]
     old_to_new = {old: new for new, old in enumerate(old_order)}
@@ -806,41 +857,30 @@ def _reorder_dict_for_positional(dictionary: list, seqs: list) -> tuple:
 # ---------------------------
 # Encode / Decode
 # ---------------------------
-def encode_onefile(input_txt: str, output_bin: str, sep_in_dict: bool = True, encoding_name: str = 'fixed'):
-    t_start = time.time()
+def encode_onefile(input_txt: str, output_bin: str, min_len: int = 2, max_len: int = 32, max_dict: int = 1023, exh_max_depth: int = 0, encoding_name: str = 'fixed'):
+    t_start  = time.time()
     encoding = ENC_NAME.get(encoding_name, ENC_FIXED)
     
     strings = read_strings_text(input_txt)
     byte_strings = to_utf8_bytes(strings)
     
-    subseqs, sep_freqs = split_strings(byte_strings)
-    
     sort_by_freq = (encoding == ENC_POSITIONAL)
-    all_bytes_for_alpha = list(subseqs) + list(sep_freqs.keys())
-    alphabet, byte_to_id, char_bits, raw_freq = build_alphabet(all_bytes_for_alpha, sort_by_freq)
+    alphabet, byte_to_id, char_bits, raw_freq = build_alphabet(byte_strings, sort_by_freq)
     char_freqs = {byte_to_id[bv]: cnt for bv, cnt in raw_freq.items()}
     char_bit_lengths = compute_char_bit_lengths(alphabet, char_freqs, encoding)
     
-    if sep_in_dict and sep_freqs:
-        init_dict = list(sep_freqs.keys())
-        init_freqs = dict(sep_freqs)
-    else:
-        init_dict = []
-        init_freqs = {}
-    
-    dictionary = build_dictionary(subseqs, char_bit_lengths, encoding, init_dict, init_freqs)
-    
-    if dictionary is None:
-        return
+    max_d = None if exh_max_depth < 0 else exh_max_depth
+    dictionary, seqs = exhaustive_build(byte_strings, char_bit_lengths, encoding, min_len, max_len, max_dict, max_d)
     
     D = len(dictionary)
     token_bits = needed_bits(D)
     
-    seqs = _rebuild_original_seqs(byte_strings, subseqs, sep_freqs, dictionary, sep_in_dict)
-    tok_freqs = count_tok_freqs(seqs)
+    tok_freqs = defaultdict(int)
     
     if encoding == ENC_POSITIONAL:
         dictionary, seqs, tok_freqs = _reorder_dict_for_positional(dictionary, seqs)
+    else:
+        tok_freqs = count_tok_freqs(seqs)
     
     codec = CODECS[encoding]
     
@@ -856,6 +896,7 @@ def encode_onefile(input_txt: str, output_bin: str, sep_in_dict: bool = True, en
     
     write_alphabet_section(bw, alphabet, char_freqs, encoding)
     write_dictionary_section(bw, dictionary, byte_to_id, tok_freqs, char_codes, char_bits, encoding)
+    
     write_stream(bw, seqs, byte_to_id, char_codes, char_bits, tok_codes, token_bits, encoding)
     
     data = bw.getvalue()
@@ -867,7 +908,7 @@ def encode_onefile(input_txt: str, output_bin: str, sep_in_dict: bool = True, en
     dict_bytes = sum(len(e) for e in dictionary)
     t_elapsed = time.time() - t_start
     
-    logging.info(f"\nOK: scritto {output_bin}")
+    logging.info(f"OK: scritto {output_bin}")
     logging.info(f"Stringhe: {len(strings)}")
     logging.info(f"Originale (UTF-8 bytes): {orig_bytes}")
     logging.info(f"Alfabeto A = {len(alphabet)} => char_bits = {char_bits}")
@@ -885,8 +926,10 @@ def decompress_onefile(path_bin: str) -> list:
         raise ValueError("MAGIC non valido")
     
     pos += 4
-    ver = data[pos]; pos += 1
-    encoding = data[pos]; pos += 1
+    ver = data[pos]
+    pos += 1
+    encoding = data[pos]
+    pos += 1
     
     if ver != VERSION:
         raise ValueError(f"Versione non supportata: {ver}")
@@ -903,23 +946,24 @@ def decompress_onefile(path_bin: str) -> list:
 # CLI
 # ---------------------------
 def main():
-    ap = argparse.ArgumentParser(description = "SDB1: compressore esaustivo su partizioni")
+    ap = argparse.ArgumentParser(description = "SDB1: DFS Branch&Bound + encoding variabile")
     
     ap.add_argument("mode", choices = ["compress", "decompress"])
     ap.add_argument("input")
     ap.add_argument("output", nargs = "?")
-    ap.add_argument("--sep-as-raw", action = "store_true", default = False, help = "Scrivi i separatori come RAW invece che nel dizionario")
+    ap.add_argument("--min-len", type = int, default = 2)
+    ap.add_argument("--max-len", type = int, default = 32)
+    ap.add_argument("--max-dict", type = int, default = 1023)
+    ap.add_argument("--exh-max-depth", type = int, default = 0, help = "Profondità DFS (0 = greedy, -1 = illimitata, N = profondità N)")
     ap.add_argument("--encoding", default = 'fixed', choices = ['fixed', 'huffman-freq', 'huffman-len', 'positional'], help = "Modalità codifica simboli (default: fixed)")
     
     args = ap.parse_args()
     
     setup_logger(args.input)
     
-    sep_in_dict = not args.sep_as_raw
-    
     if args.mode == "compress":
         out = args.output or "compressed.bin"
-        encode_onefile(args.input, out, sep_in_dict, args.encoding)
+        encode_onefile(args.input, out, args.min_len, args.max_len, args.max_dict, args.exh_max_depth, args.encoding)
     else:
         strings = decompress_onefile(args.input)
         

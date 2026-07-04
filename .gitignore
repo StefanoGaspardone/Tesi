@@ -92,6 +92,8 @@ $RECYCLE.BIN/
 # Algoritmi - Ignora la cartella degli output
 outputs/
 algorithms/outputs/
+*.bin
+logs/
 
 # LaTeX (per la cartella thesis)
 *.aux
