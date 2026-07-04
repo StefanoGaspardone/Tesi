@@ -881,7 +881,7 @@ def decompress_onefile(path_bin: str) -> list:
     
     pos = 0
     
-    if data[pos : pos + 4] != MAGIC:
+    if data[pos : pos+4] != MAGIC:
         raise ValueError("MAGIC non valido")
     
     pos += 4
