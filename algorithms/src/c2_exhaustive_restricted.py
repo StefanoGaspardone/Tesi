@@ -933,7 +933,7 @@ def main():
     setup_logger(args.input)
     
     if args.mode == "compress":
-        out = args.output or f"{args.input.split(".")[0]}_compressed.bin"
+        out = args.output or f"c2_exhaustive_restricted_{args.input.split(".")[0]}_compressed.bin"
         encode_onefile(args.input, out, args.min_len, args.max_len, args.max_dict, args.lookahead_depth, args.lookahead_topk, args.encoding)
     else:
         strings = decompress_onefile(args.input)
