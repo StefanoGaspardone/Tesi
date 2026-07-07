@@ -102,7 +102,11 @@ def encode_onefile(input_txt: str, output_bin: str, level: int = 9):
     for cs in compressed_strings:
         out += struct.pack('>I', len(cs)) + cs
 
-    with open(output_bin, "wb") as f:
+    output_dir = os.path.join("..", "outputs")
+    os.makedirs(output_dir, exist_ok = True)
+    full_output_path = os.path.join(output_dir, output_bin)
+    
+    with open(full_output_path, "wb") as f:
         f.write(out)
 
     orig_bytes = sum(len(b) for b in byte_strings)
@@ -117,7 +121,9 @@ def encode_onefile(input_txt: str, output_bin: str, level: int = 9):
     logging.info(f"Tempo: {t_elapsed:.4f} s")
 
 def decompress_onefile(path_bin: str) -> list:
-    with open(path_bin, "rb") as f:
+    full_path = os.path.join("..", "outputs", path_bin)
+    
+    with open(full_path, "rb") as f:
         data = f.read()
 
     pos = 0
@@ -155,7 +161,7 @@ def main():
     setup_logger(args.input)
 
     if args.mode == "compress":
-        out = args.output or f"zlib_{args.input.split(".")[0]}_compressed.bin"
+        out = args.output or f"zlib_{args.input.split('.')[0]}_compressed.bin"
         encode_onefile(args.input, out, args.level)
     else:
         strings = decompress_onefile(args.input)

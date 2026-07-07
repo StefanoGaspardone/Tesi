@@ -626,8 +626,8 @@ def scoring_function(pat_bytes: bytes, occ: int, char_bit_lengths: dict, token_b
     L = len(pat_bytes)
     pat_bits = sum(char_bit_lengths[b] for b in pat_bytes)
     
-    old_cost  = occ * (L + pat_bits)
-    new_cost  = occ * (1 + token_bits_after)
+    old_cost = occ * (L + pat_bits)
+    new_cost = occ * (1 + token_bits_after)
     dict_cost = (varint_size(L) * 8) + pat_bits
     
     return old_cost - new_cost - dict_cost
@@ -690,7 +690,7 @@ def replace_non_overlapping(seqs: list, pat_bytes: bytes, token_id: int) -> list
         i   = 0
         
         while i < len(seq):
-            if i <= len(seq) - m and seq[i : i + m] == pat:
+            if i <= len(seq) - m and seq[i : i+m] == pat:
                 out.append(token)
                 i += m
             else:
@@ -803,6 +803,7 @@ def exhaustive_build(byte_strings: list, char_bit_lengths: dict, encoding: int, 
         if current_bits - ub_gain_bits >= base_bits:
             stats['pruned_bb'] += 1
             memo[key] = best_local
+            
             return best_local
         
         D = len(dct)
@@ -971,7 +972,7 @@ def main():
     setup_logger(args.input)
     
     if args.mode == "compress":
-        out = args.output or f"c2_exhaustive_{args.input.split(".")[0]}_compressed.bin"
+        out = args.output or f"c2_exhaustive_{args.input.split('.')[0]}_compressed.bin"
         encode_onefile(args.input, out, args.min_len, args.max_len, args.max_dict, args.exh_max_depth, args.encoding)
     else:
         strings = decompress_onefile(args.input)

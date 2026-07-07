@@ -937,7 +937,7 @@ def main():
     sep_in_dict = not args.sep_as_raw
     
     if args.mode == "compress":
-        out = args.output or f"exhaustive_{args.input.split(".")[0]}_compressed.bin"
+        out = args.output or f"exhaustive_{args.input.split('.')[0]}_compressed.bin"
         encode_onefile(args.input, out, sep_in_dict, args.encoding)
     else:
         strings = decompress_onefile(args.input)
