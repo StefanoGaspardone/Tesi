@@ -213,6 +213,7 @@ def canonical_codes(lengths: dict) -> dict:
 
 def canonical_lookup(lengths: dict) -> tuple:
     syms = sorted(lengths.keys(), key = lambda s: (lengths[s], s))
+    
     lookup = {}
     code = 0
     prev = 0
@@ -667,7 +668,7 @@ def count_non_overlapping(seq: list, pat_bytes: bytes) -> int:
     c = 0
     
     while i <= len(seq) - m:
-        if seq[i : i + m] == pat:
+        if seq[i : i+m] == pat:
             c += 1
             i += m
         else:
@@ -687,7 +688,7 @@ def replace_non_overlapping(seqs: list, pat_bytes: bytes, token_id: int) -> list
     
     for seq in seqs:
         out = []
-        i   = 0
+        i = 0
         
         while i < len(seq):
             if i <= len(seq) - m and seq[i : i+m] == pat:
@@ -764,7 +765,7 @@ def exhaustive_build(byte_strings: list, char_bit_lengths: dict, encoding: int, 
         total = 0.0
         
         for pat in candidates:
-            occ  = total_non_overlapping(sqs, pat)
+            occ = total_non_overlapping(sqs, pat)
             gain = scoring_function(pat, occ, char_bit_lengths, 1)
             
             if gain > 0:
@@ -780,7 +781,7 @@ def exhaustive_build(byte_strings: list, char_bit_lengths: dict, encoding: int, 
             stats['memo_hits'] += 1
             return memo[key]
         
-        base_dct, base_sqs = greedy_build(byte_strings, char_bit_lengths, encoding, min_len, max_len, max_dict, init_dict = list(dct), init_seqs = list(sqs))
+        base_dct, base_sqs = greedy_build(byte_strings, char_bit_lengths, encoding, min_len, max_len, max_dict, list(dct), list(sqs))
         base_bits = score_dictionary_bits(base_dct, base_sqs, char_bit_lengths, encoding)
         best_local = (base_bits, list(base_dct), base_sqs)
         
@@ -843,7 +844,7 @@ def exhaustive_build(byte_strings: list, char_bit_lengths: dict, encoding: int, 
     init_bits = score_dictionary_bits([], init_seqs, char_bit_lengths, encoding)
     _best_bits, best_dict, best_seqs = dfs([], init_seqs, init_bits, 0)
     
-    logging.info(f"DFS: nodi={stats['nodes']}, potati={stats['pruned_bb']}, memo_hits={stats['memo_hits']}")
+    logging.info(f"DFS: nodes = {stats['nodes']}, pruned = {stats['pruned_bb']}, memo_hits = {stats['memo_hits']}")
     
     return best_dict, best_seqs
 
