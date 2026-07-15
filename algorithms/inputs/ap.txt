@@ -1,0 +1,42 @@
+Support for WPA3 Enterprise in OpenRoaming, see “Wireless Networks — OpenRoaming” on page 82
+Added note about Open Mesh configuration, see “Wireless Networks — Open Mesh Settings” on page 82
+Modified BLE settings, see “BLE” on page 102
+Added MQTT settings page, see “MQTT” on page 104
+Added RSTP support, see “LAN Settings” on page 50
+Added support for WireGuard VPN, see “VPN Settings” on page 65
+Added DS-Lite as an IP address mode, see “Internet Settings” on page 43
+Added Radio Resource Management, see “Radio Resource Management” on page 84
+Added support for EAP112
+Added HaLow and LTE support for EAP112
+Added 3G/LTE to Internet settings, see “Internet Settings” on page 43
+Added MQTT to BLE settings, see “BLE” on page 102
+Minimum Signal Allowed setting for each SSID, see “Wireless Networks — General Settings” on page 73
+Added Device OS Blacklist, see “Wireless Networks — General Settings” on page 73
+Added support for EAP111
+Added RADIUS NAS ID, see “Wireless Networks — Security Settings” on page 75
+Modified Minimum Signal Allowed default, see “Physical Radio Settings” on page 69
+Added OpenRoaming captive portal, see “OpenRoaming” on page 59
+Added OpenRoaming NAI Realm List Method/Authentication, see “OpenRoaming” on page 59
+Added Syslog Level, see “System Settings” on page 88
+Added support for OAP101
+Added SSID isolation, see “Physical Radio Settings” on page 69
+Multiple PSK enhancement, see “Wireless Networks — Security Settings” on page 75
+Added OpenRoaming, see “OpenRoaming” on page 59 and “Wireless Networks — OpenRoaming” on page 82
+Modified broadcast rate, see “Physical Radio Settings” on page 69
+Access Control List enhancement, see “Wireless Networks — Security Settings” on page 75
+Hostname enhancement, see “System Settings” on page 88
+Moved the language setting to the System page, see “System Settings” on page 88
+Firmware upgrade enhancement, see “Upgrading Firmware” on page 93
+Account username enhancement, see “User Accounts” on page 94
+Added WAN port auto-detection to QR code Onboarding, see “QR Code Onboarding” on page 27
+Added automatic mesh AP configuration, see “Mesh AP Configuration” on page 30
+Removed Mark and Notrack from firewall rules, see “Firewall Rules” on page 52
+Modified Minimum Signal Allowed, see “Physical Radio Settings” on page 69
+Added RF Isolation, see “Physical Radio Settings” on page 69
+Modified Dynamic VLAN, see “Wireless Networks — Network Settings” on page 80
+Modified HotSpot 2.0 settings, see “Wireless Networks — Network Settings” on page 80
+Added Log Level, see “System Settings” on page 88
+Added SNMPv3 User, see “SNMP” on page 100
+Modified Diagnostics and added Speed Test, see “Diagnostics” on page 105
+Updated QR code Onboarding, see “QR Code Onboarding” on page 27
+Updated wireless status, see “Wireless Status” on page 38

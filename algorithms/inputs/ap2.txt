@@ -1,0 +1,191 @@
+Radio Settings The IEEE 802.11 wireless interfaces include configuration options for radio signal characteristics and wireless security features.
+The access point can operate in several radio modes, 802.11b+g+n/ax (2.4 GHz) or 802.11a/a+n/ac+a+n/ax (5 GHz). Note that the dual-band access points can operate at 2.4 GHz and 5 GHz at the same time. The web interface identifies the radio configuration pages as:
+Radio 2.4 GHz - the 2.4 GHz 802.11b/g/n/ax radio interface
+Radio 5 GHz - the 5 GHz 802.11a/n/ac/ax radio interface
+HaLow - the HaLow (863-928 MHz) radio interface (EAP112 only)
+Each radio supports 16 virtual access point (VAP) interfaces based on the SSIDs, referred to as SSID1 ~ SSID16. Each VAP functions as a separate access point, and can be configured with its own Service Set Identification (SSID) and security settings. However, most radio signal parameters apply to all VAP interfaces. Traffic to specific VAPs can be segregated based on user groups or application traffic. The clients associate with each VAP in the same way as they would with separate physical access points.
+Physical Radio Figure 43: Physical Settings for Radio 5 GHz Settings
+The following items are displayed on this page:
+Status - Enables or disables the wireless service on this interface.
+Mode - Selects the mode in which the AP will function.
+Access Point (Auto-WDS) - The AP operates as an access point in WDS mode, which accepts connections from APs in Client WDS mode. (This is the default setting.)
+In this mode, the AP provides services to clients as a normal access point. WDS is used to automatically search for and connect to other AP nodes using the same SSID and security settings.
+Client - The AP can provide a wireless connection to another AP, as well as pass information from or to locally wired hosts and wireless clients.
+802.11 Mode - Defines the radio operation mode.
+Radio 2.4 GHz - Default: 11ax; Options: 11b+g+n/ax
+Radio 5 GHz - Default: 11ax; Options: 11a, 11a+n, 11ac+a+n, 11ax
+Channel Bandwidth - The AP options for channel bandwidth include 20, 40 80, and 160 MHz. The available channel bandwidth is dependent on the 802.11 Mode. (Default: 20 MHz on 2.4 GHz Radio, 80 MHz on 5 GHz Radio; Options: 20 MHz, 40 MHz, 80MHz, 160MHz)
+1–8 MHz - For 802.11ah HaLow (EAP112 only)
+20MHz - For 802.11b+g+n and 802.11ax
+40MHz - For 802.11b+g+n, 802.11a, 802.11a+n, 802.11ac+a+n and 802.11ax
+80MHz - For 802.11ac+a+n and 802.11ax
+160MHz - (Supported only on EAP104, EAP111, EAP112 and OAP101 5 GHz radio) For 802.11ac+a+n and 802.11ax
+Channel - The radio channel that the access point uses to communicate with wireless clients. When multiple access points are deployed in the same area, set the channel on neighboring access points at least five channels apart to avoid interference with each other. For example, for 11g/n 20 MHz mode you can deploy up to three access points in the same area using channels 1, 6, 11. Note that wireless clients automatically set the channel to the same as that used by the access point to which it is linked. (The available channels are dependent on the 802.11 Mode, Channel Bandwidth, and Country Code settings.) Selecting Auto enables the access point to automatically select an unoccupied radio channel. (Default: Auto)
+WME Configuration - Wireless Multimedia Extensions (WME), also known as Wi-Fi Multimedia (WMM), is a Wi-Fi Alliance interoperability certification, based on the IEEE 802.11e standard. It provides basic Quality of service (QoS) features for IEEE 802.11 networks. Access priority can be configured for four “Access Category”(AC) types using the following parameters:
+CW Min (Minimum Contention Window) – The initial upper limit of the random backoff wait time before wireless medium access can be attempted. The initial wait time is a random value between zero and the
+CWMin value. Specify the CWMin value in the range 0-15 microseconds. Note that the CWMin value must be equal or less than the CWMax value.
+CW Max (Maximum Contention Window) – The maximum upper limit of the random backoff wait time before wireless medium access can be attempted. The contention window is doubled after each detected collision up to the CWMax value. Specify the CWMax value in the range 0-15 microseconds. Note that the CWMax value must be greater or equal to the CWMin value.
+AIFS (Arbitration Inter-Frame Space) – The minimum amount of wait time before the next data transmission attempt. Specify the AIFS value in the range 0-15 microseconds.
+TXOP Limit (Transmit Opportunity Limit) – The maximum time an AC transmit queue has access to the wireless medium. When an AC queue is granted a transmit opportunity, it can transmit data for a time up to the TXOP Limit. This data bursting greatly improves the efficiency for high data- rate traffic. Specify a value in the range 0-8192 microseconds.
+Beacon Interval - The rate at which beacon signals are transmitted from the access point. The beacon signals allow wireless clients to maintain contact with the access point. They also carry power-management and other information. (Range: 100-1024 TUs; Default: 100 TUs)
+Bandsteering - When enabled, clients that support 2.4 GHz and 5 GHz are first connected to the 5 GHz radio. This feature helps balance the client load over the two radio bands. Note that both radios must have configured SSIDs and security settings that match for this feature to fully operate. (Default: Off)
+Airtime Fairness - Enabling this feature improves the overall performance of the wireless network. (Default: Disabled)
+BSS coloring - In 802.11ax (Wi-Fi 6) mode, BSS coloring allows nearby APs operating at the same frequency to identify traffic belonging to their own Basic Service Set (BSS). The BSS coloring enables Wi-Fi 6 networks to operate more efficiently in high-density environments where neighboring AP and client transmissions overlap. Assign a color value (a number from 1 to 63) to identify the radio BSS, or enter value 64 to allow the AP to randomly select a color value. (Range: 1-63, 64 random; Default: 64)
+Interference Detection - When the utilization in current channel reaches the configured threshold (as a percentage), the AP switches to a different channel. (Range: 0 - 100%; Default: 0, disabled)
+OFDMA - The 802.11ax (Wi-Fi 6) mode supports Orthogonal Frequency Division Multiple Access (OFDMA) and this cannot be disabled.
+Target Wake Time - In 802.11ax (Wi-Fi 6) mode, the AP can allow clients to request a specific Target-Wakeup Time (TWT) to transmit or receive frames,
+rather than rely on periodic beacons. This feature enables client devices to have much longer sleep states and results in significant power savings. In addition, the AP can control and schedule client TWTs to both manage contention in the network and accommodate delay-sensitive traffic. (Default: Disabled)
+Broadcast Rate - Allows a limit to be placed on the wireless bandwidth consumed by broadcast packets.
+Radio 2.4 Ghz - Options: 5.5M, 6M, 9M, 11M, 12M, 18M, 24M, 36M, 48M, 54M; Default: 5.5M
+Radio 5 Ghz - Options: 6M, 9M, 12M, 18M, 24M, 36M, 48M, 54M; Default: 6M
+RF Isolation - When enabled, clients are isolated between different radio cards.
+SSID Isolation - When enabled, clients are isolated between different SSIDs on the same radio cards.
+The following items are displayed in this section of the Wireless Settings page:
+Status - Enables or disables the wireless service on this VAP.
+SSID - The name of the basic service set provided by a Virtual Access Point (VAP) interface. Clients that want to connect to the network through the access point must set their SSID to the same as that of the access point’s VAP interface. (Default: Edgecore5G-# (where # is 1-16) for 5 GHz, Edgecore2.4G-# (where # is 1-16) for 2.4 GHz; Range: 1-32 characters)
+Site Survey - Scans for all wireless networks that are broadcasting their SSID.
+Broadcast - The SSID can be broadcast at regular intervals so that wireless stations searching for a network connection can discover it. This allows wireless clients to dynamically discover and roam between WLANs. This feature also makes it easier for hackers to break into your home network. Because SSIDs are not encrypted, it is easy to grab one by snooping the WLAN looking for SSID broadcast messages coming from the AP. (Default: Enabled)
+Local Configurable - Enables the SSID to be user configurable when the system is operating in MSP mode (see “System Settings” on page 88). (Default: Disabled)
+Client Isolation - When enabled, wireless clients can talk to the LAN, and reach the Internet if such connection is available, but they cannot communicate with one another. (Default: Disabled)
+Multicast-to-Unicast Conversion - When enabled, the AP converts multicast traffic to unicast traffic and sends it to each associated client. This feature provides a network throughput enhancement, since the AP transmits multicast traffic at a low basic rate, whereas unicast traffic can be transmitted at HT, VHT, or HE rates.
+Max Clients - The maximum number of clients that can associate to this SSID at the same time. (Default: 127; Range: 1-256) Minimum signal allowed - Only allows clients to connect to the radio interface if their signal strength (RSSI) is equal or greater than the specified value. Setting the value to -100 disables this feature. Clients already connected are checked periodically. (Range: -1 to -100; Default: -100)
+This forces clients to associate with an AP that has a better signal strength (also called assisted roaming). Suggested value is -70 to -80 depending on access point density and coverage.
+Idle Timeout (sec) - The AP disconnects a client when there is no activity for the configured amount of time. (Default: 300 seconds; Range: 60-60000 seconds) Device OS Blacklist - Denies access to the SSID from client devices with either Android, iOS/macOS, or Windows operating systems. Set to ON to prevent a client OS from connecting to the SSID. Set to OFF to allow a client OS to connect to the SSID.
+The following items are displayed in this section of the Wireless Settings page:
+Method - Sets the wireless security method for each VAP, including association mode, encryption, and authentication. (Default: WPA2-PSK)
+No Security - The VAP broadcasts a beacon signal including the configured SSID. Wireless clients with an SSID setting of “any” can read the SSID from the beacon and automatically set their SSID to allow immediate connection.
+WPA-PSK - For enterprise deployment, WPA requires a RADIUS authentication server to be configured on the wired network. However, for small office networks that may not have the resources to configure and maintain a RADIUS server, WPA provides a simple operating mode that uses just a pre-shared password for network access. The Pre-Shared Key mode uses a common password for user authentication that is manually entered on the access point and all wireless clients. The PSK mode uses the same TKIP packet encryption and key management as WPA in the enterprise, providing a robust and manageable alternative for small networks.
+Encryption - Data encryption uses one of the following methods:
+CCMP (AES) - AES-CCMP is used as the multicast encryption cipher. AES-CCMP is the standard encryption cipher required for WPA2. (This is the default setting.)
+Auto: TKIP + CCMP (AES) - The encryption method used by the client is discovered by the access point.
+Key Method - Uses one of the following PSK methods:
+Single PSK - Enables the entry of a single PSK key.
+Key - WPA is used to encrypt data transmitted between wireless clients and the VAP. WPA uses static shared keys (fixed- length hexadecimal or alphanumeric strings) that are manually distributed to all clients that want to use the network.
+String length must be 8 to 63 ASCII characters (letters and numbers). No special characters are allowed.
+Multiple PSK —Enables the entry of multiple PSK keys. Up to 128 keys can be configured.
+Multiple Keys - Enter multiple keys, one per line. Entering a key with a specific MAC address limits the key for use by a single client. Entering a key without a MAC address enables the key to be used by all clients.
+Multiple keys are supported for WPA-PSK, WPA2-PSK, and WPA3 Personal Transition security.
+Dynamic PSK - Enables the use of dynamic PSK keys that are periodically generated and updated by a RADIUS authentication server. The RADIUS server IP address, UDP port, and secret text string must be specified. (See “RADIUS Settings” below for details.)
+Dynamic keys are supported only for WPA2-PSK security.
+WPA2-PSK - Clients using WPA2 with a Pre-shared Key are accepted for authentication. WPA was introduced as an interim solution for the vulnerability of WEP pending the ratification of the IEEE 802.11i wireless security standard. In effect, the WPA security features are a subset of the 802.11i standard. WPA2 includes the now ratified 802.11i standard, but also offers backward compatibility with WPA. Therefore, WPA2 includes the same 802.1X and PSK modes of operation and support for TKIP encryption.
+Refer to WPA-PSK for a description of encryption methods and the key.
+WPA-EAP - WPA employs a combination of several technologies to provide an enhanced security solution for 802.11 wireless networks. A RADIUS server is used for authentication, and can also be used for accounting. Refer to WPA-PSK for a description of encryption methods.
+RADIUS Settings - A RADIUS server must be specified for the access point to implement IEEE 802.1X network access control and Wi-Fi Protected Access (WPA) wireless security.
+In addition, you can configure a RADIUS Accounting server to receive user- session accounting information from the access point. RADIUS Accounting can be used to provide valuable information on user activity in the network.
+Note: This guide assumes that you have already configured RADIUS server(s) to support the access point. Configuration of RADIUS server software is beyond the
+scope of this guide, refer to the documentation provided with the RADIUS server software.
+Radius Auth Server - Specifies the IP address or host name of the RADIUS authentication server.
+Radius Auth Port - The UDP port number used by the RADIUS server for authentication messages. (Range: 1024-65535; Default: 1812)
+Radius Auth Secret - A shared text string used to encrypt messages between the access point and the RADIUS server. Be sure that the same text string is specified on the RADIUS authentication server. Do not use blank spaces in the string. (Maximum length: 255 characters)
+NAS ID - The RADIUS NAS identifier for the SSID interface This value must be between 1 and 48 characters long.
+Backup Radius Auth - Enables the support of a backup RADIUS authentication server.
+Radius Auth Server - Specifies the IP address or host name of the backup RADIUS authentication server.
+Radius Auth Port - The UDP port number used by the backup RADIUS server for authentication messages. (Range: 1024-65535; Default: 1812)
+Radius Auth Secret - A shared text string used to encrypt messages between the access point and the RADIUS server. Be sure that the same text string is specified on the backup RADIUS authentication server. Do not use blank spaces in the string. (Maximum length: 200 characters)
+Use Radius Accounting - Enables the support of a RADIUS accounting server.
+Acct Server - Specifies the IP address or host name of the RADIUS accounting server.
+Acct Port - The UDP port number used by the RADIUS server for accounting messages. (Range: 1024-65535; Default: 1813)
+Acct Secret - A shared text string used to encrypt messages between the access point and the RADIUS server. Be sure that the same text string is specified on the RADIUS accounting server. Do not use blank spaces in the string. (Maximum length: 200 characters)
+Acct Interim Interval - The time (in seconds) between each accounting update sent to the server. (Range: 60-600 seconds; Default: 60 seconds)
+WPA2-EAP - WPA was introduced as an interim solution for the vulnerability of WEP pending the ratification of the IEEE 802.11i wireless security standard. In effect, the WPA security features are a subset of the 802.11i standard. WPA2 includes the now ratified 802.11i standard, but also offers backward compatibility with WPA. Therefore, WPA2 includes the same 802.1X and PSK modes of operation and support for TKIP encryption. A RADIUS server is used for authentication, and can also be used to accounting.
+Refer to WPA-PSK for a description of encryption methods.
+Refer to WPA-EAP for a information on configuring the RADIUS server.
+WPA3 Personal - Clients using WPA3 with Simultaneous Authentication of Equals (SAE) are accepted for authentication.
+WPA3 provides more robust password-based authentication called Simultaneous Authentication of Equals (SAE), which replaces Pre-Share Key (PSK) in WPA2-Personal. This technology prevents offline dictionary attacks so that data traffic can be transmitted securely.
+WPA3 Personal Transition - Clients using WPA3 with SAE or clients using WPA2 with PSK are accepted for authentication. The AP negotiates the supported authentication and encryption with each client before allowing access to the network.
+WPA3 Enterprise - An enhanced version of WPA2-EAP security that uses more robust encryption. Clients must support one of the stronger WPA3 encryption options and use Protected Management Frames (PMF) to be able to access the network. The use of IEEE 802.1X network access control and a RADIUS server is required.
+Refer to RADIUS Settings above for information on RADIUS configuration.
+WPA3 Enterprise Transition - Allows WPA3 and WPA2 clients to access the network. Encryption options and the use of Protected Management Frames (PMF) are negotiated with each client before allowing access to the network.
+Refer to RADIUS Settings above for information on RADIUS configuration.
+WPA3 Enterprise 192-bit - WPA3 Enterprise security uses a standard 128-bit encryption. For a network handling more sensitive data, there is an option to use 192-bit encryption for additional protection.
+Refer to RADIUS Settings above for information on RADIUS configuration.
+OWE - Opportunistic Wireless Encryption (OWE) is the WPA3 open network security that allows users of public Wi-Fi networks to gain secure access without using a password. OWE provides individual encryption of data communications between the AP and each client, but does not provide authentication of user identities.
+PMF - Protected Management Frames (PMF) provide WPA2/WPA3 security for unicast and multicast management frames between the AP and clients. The “Optional” setting allows clients that do not support PMF to access the network. The “Mandatory” setting allows only clients that support PMF to access the network. (Default: Optional)
+802.11k - Provides clients with information on neighbor APs when roaming. As a client is about to roam from an AP, it sends a request for a “Neighbor Report” that includes a list of available APs and associated information. The client can then quickly identify the best AP to which it can roam without having to scan all channels. (Default: Disabled)
+802.11r - Provides a method for fast transition roaming between APs. Before clients roam to a new AP, the initial handshake and encryption calculations are performed in advance, which results in a fast hand off without the need for re- authentication. (Default: Disabled)
+802.11v - Provides information to associated clients that facilitates the overall improvement of the wireless network. Also helps clients to improve battery life by setting the idle period. (Default: Disabled)
+Radius MAC Auth - The MAC address of the associating station is sent to a configured RADIUS server for authentication. (Default: Disabled)
+Dynamic Authorization - The Dynamic Authorization Extensions (DAE) to RADIUS enable a server to disconnect or change the authorization of clients that are already connected to the network. (Default: Disabled)
+DAE Port - The UDP port number to use for DAE messages. (Default: 3799)
+DAE Client - Specifies the IPv4 address of the RADIUS server.
+DAE Secret - The shared text string used to encrypt DAE messages between the access point and the RADIUS server.
+Access Control List - Wireless clients can be authenticated for network access by checking their MAC address against the local database configured on the access point. (Default: OFF)
+Policy - The MAC list can be configured to either allow or deny network access to specified clients. (Default: Allow all MACs on list)
+Filtered MACs - List of client MAC addresses. Up to 512 MAC addresses can be configured.
+The following items are displayed in this section of the Wireless Settings page:
+Network Behavior - One of the following connection methods must be specified. (Default: Route to Internet)
+Bridge to Internet - Configures an interface as attached to the WAN. Traffic from this interface is directly bridged into the Internet. (See Figure 30, “Bridge to Internet", on page 49.)
+Route to Internet - Configures an interface as a member of the LAN. Traffic from this interface is routed across the access point and out through an interface which is bridged to the Internet. (See Figure 31, “Route to Internet", on page 49.)
+Network Name - The network to be routed. The default is “Default local network” as displayed under LAN Settings – Local Network.
+Add to Guest Network - This interface can only support the guest network.
+Hotspot Controlled - This interface can only support hotspot services.
+Configure Hotspot - Opens Hotspot Settings page.
+Walled Garden - Configures the Walled Garden list on the Hotspot Settings page.
+VLAN Tag Traffic - Tags any packets passing from this VAP (virtual access point) to the associated Ethernet port with a VLAN ID configured under “VLAN Settings” on page 85.
+VLAN Id - Selects the configured VLAN ID with which to tag the VAP traffic.
+VLAN Settings - Opens the VLAN Settings page.
+Dynamic VLAN - The RADIUS server provides the access point with the user VLAN information. The access point assigns the associated user to the related VLAN.
+Default VLAN Behavior - Specifies the behavior (Accept or Reject) when a client’s VLAN ID is not defined on the RADIUS server. The default setting is Reject.
+Reject - A client cannot connect to the SSID when the client’s VLAN ID is not defined on the RADIUS server.
+Accept - A client can connect to the SSID with an assigned or untagged VLAN ID when the client’s VLAN ID is not defined on the RADIUS server.
+CAPWAP Tunnel Interface - When the AP system management is set to EWS-Series Controller mode (see “System Settings” on page 88), the CAPWAP (Control And Provisioning of Wireless Access Points) protocol tunnel mode can be configured. The options are “Disable,” “Complete,” or “Split.” A Complete tunnel sends all management, authentication, and data traffic from the AP back to the controller. A Split tunnel only sends the management and authentication traffic to the controller. (Default: Disable)
+Proxy ARP - When Proxy ARP is enabled, the AP maintains its own ARP lookup table and replies to ARP requests on behalf of downstream stations, avoiding network inefficiencies. This feature is automatically enabled when client isolation is disabled, and disabled when client isolation is enabled. The feature cannot be configured manually. Proxy ARP is supported when the network behavior is “Bridge to Internet” or “VLAN Tag Traffic.”
+Limit Upload - Enables rate limiting of traffic from the VAP interface as it is passed to the wired network. You can set a maximum rate in Kbytes per second. (Range: 256-10048576 Kbytes per second; Default: OFF)
+Limit Download - Enables rate limiting of traffic from the wired network as it is passed to the VAP interface. You can set a maximum rate in kbytes per second. (Range: 256-10048576 Kbytes per second; Default: OFF)
+Authentication - When the AP system management is set to ecCLOUD mode (see “System Settings” on page 88), this options authenticates the AP communications with the ecCLOUD controller. (Default: Disabled)
+Wireless Networks - Available when WPA2-EAP or WPA3 Enterprise security is selected, OpenRoaming OpenRoaming (Hotspot 2.0) provides a standard for public-access Wi-Fi networks to support seamless roaming between wireless networks. A OpenRoaming AP advertises its public Wi-Fi capabilities and services so that clients can decide if they want to connect to the network.
+The following items are displayed in this section of the Wireless Settings page:
+OpenRoaming - Enables OpenRoaming when WPA2-EAP or WPA3 Enterprise security is selected. (Default: Disabled)
+OpenRoaming Profile - Selects the profile to apply to the wireless network. See “OpenRoaming” on page 59 for profile configuration.
+OpenRoaming Settings - Click to access the OpenRoaming profile settings page. See “OpenRoaming” on page 59 for profile configuration.
+Wireless Networks - Open Mesh is a network of interconnected node APs, of which only one has a Open Mesh Settings wired connection to the network (and the Internet). The other AP nodes provide wireless links to each other and some support connections to wireless clients. The mesh network not only extends wireless connectivity over a greater distance, but also provides backup links should one node in the network fail.
+When setting up an AP to be a node in a mesh network, select one radio interface (2.4 GHz or 5 GHz) and configure it to operate on a specific channel (do not select Auto).Set up other AP nodes to operate on the same radio interface, channel, and with the same SSID.
+Note: When Open Mesh is enabled on the 5 GHz wireless band, only one DFS channel can be selected. If interference is detected, Open Mesh cannot be established successfully. It is recommended to use a non-DFS channel to set up the mesh network.
+The following items are displayed in this section of the Wireless Settings page:
+Mesh Point - Enables Open Mesh support on the SSID interface.
+Mesh ID - Name of the mesh network.
+Method - Security applied on Open Mesh links.
+No Security - None.
+WPA3-Personal - Uses WPA3 with Simultaneous Authentication of Equals (SAE) on mesh links to other APs.
+Network Behavior - One of the following connection methods must be specified. (Default: Route to Internet)
+Bridge to Internet - Configures an interface as attached to the WAN. Traffic from this interface is directly bridged into the Internet. (See Figure 30, “Bridge to Internet", on page 49.)
+Route to Internet - Configures an interface as a member of the LAN. Traffic from this interface is routed across the access point and out through an interface which is bridged to the Internet. (See Figure 31, “Route to Internet", on page 49.)
+Network Name - The network to be routed. The default is “Default local network” as displayed under LAN Settings – Local Network.
+The following items are displayed in this section of the Wireless Settings page:
+Tx Power - Adjusts the power of the radio signals transmitted from the access point. The higher the transmission power, the farther the transmission range.
+Power selection is not just a trade off between coverage area and maximum supported clients. You also have to ensure that high-power signals do not interfere with the operation of other radio devices in the service area. (The range of power settings and defaults are dependent on the AP model and the Country setting.)
+SGI - Enables the Short Guard Interval (SGI) in the following 802.11 modes: 5 GHz radio; 802.11a, 802.11a+ n, 802.11ac+a+n. 2.4 GHz radio; 802.11 b g+ n.
+The 802.11n draft specifies two guard intervals: 400ns (short) and 800ns (long). Support of the 400ns Short Guard Interval is optional for transmit and receive. The purpose of a guard interval is to introduce immunity to propagation delays, echoes, and reflections to which digital data is normally very sensitive. Enabling SGI sets it to 400ns. (Default: Disabled)
+Radio Resource Management Radio Resource Management (RRM) is designed to automatically optimize Wi-Fi channel performance and ensure network stability. When enabled, RRM continuously checks if a channel's utilization exceeds a predefined threshold and, if determined to be too busy, triggers an optimization algorithm to select another channel that is less congested.
+The following items are displayed on this page:
+Status - Enables the Radio Resource Management feature.
+Utilization Threshold - The airtime utilization percentage threshold. If set to 70, channel optimization considers triggering when utilization exceeds 70%. (Range: 0–99%; Default: 70%)
+Advanced Options - Enables additional settings.
+Interval (in seconds) - Defines the interval for checking the channel utilization. (Range: 240–86400 seconds; Default: 3600 seconds)
+Consecutive Breaches - Specifies the number of consecutive times the channel utilization must be higher than the threshold before triggering channel optimization. (Range: 1–1000; Default: 1)
+Optimization Algorithm - Selects the optimization method to use. (Default: Random Channel Selection (RCS))
+Auto Channel Selection (ACS) - The AP uses its automatic optimization algorithm to analyze available channels and select the channel with the lowest utilization or interference.
+Random Channel Selection (RCS) - The AP randomly selects a channel and checks if it has a lower utilization before switching to it.
+VLAN Settings VLANs (virtual local area networks) are turned off by default. If turned on they will automatically tag any packets passed to the LAN port from the relevant VAP (virtual access point).
+The access point can employ VLAN tagging to control access to network resources and increase security. VLANs separate traffic passing between the access point, associated clients, and the wired network. You can create up to 16 VLAN tagged networks.
+Note the following points about the access point’s VLAN support:
+If an Ethernet LAN port on the access point is assigned a VLAN ID, any traffic entering that port must be also tagged with the same VLAN ID.
+Wireless clients associated to the access point can be assigned to a VLAN. Wireless clients are assigned to the VLAN for the VAP interface with which they are associated. The access point only allows traffic tagged with correct VLAN IDs to be forwarded to associated clients on each VAP interface.
+When VLAN support is enabled on the access point, traffic passed to the wired network is tagged with the appropriate VLAN ID. When an Ethernet port on the access point is configured as a VLAN member, traffic received from the wired network must also be tagged with the same VLAN ID. Received traffic that has an unknown VLAN ID or no VLAN tag is dropped.
+When VLAN support is disabled, the access point does not tag traffic passed to the wired network and ignores the VLAN tags on any received frames.
+Network IP range conflict detection and resolution - The AP has two built-in local networks - one “main” network, and the more secure “guest” network. By default, the subnet ranges of these networks is set to 192.168.2.1 and 192.168.3.1, respectively.
+If your network is already configured to use one of these subnets, when you plug in your network cable to the WAN port of your AP, there would normally be an IP conflict in the local AP’s network and your upstream network.
+However, if your WAN subnet conflicts with any of the local networks (even the custom ones you create), the AP will automatically change the subnet of the local network.
+Note: Before enabling VLAN tagging on the access point, be sure to configure the attached network switch port to support tagged VLAN frames for the VLAN IDs configured on the access point. Otherwise, connectivity to the access point will be lost when you enable the VLAN feature.
+The following items are displayed on this page:
+VLAN ID - A VLAN identifier to be assigned. (Range: 2-4094) (VLANs 1 is reserved for internal use.)
+Ports - The Ethernet ports assigned to the specified VLAN.
+Members - The SSID of a VAP configured to be a member of the specified VLAN. This option is configured under Radio Settings (Network Settings – Network Behavior).
+This chapter describes maintenance settings on the access point. It includes the following sections:
+“System Settings” on page 88
+“Maintenance” on page 90
+“Upload Certificate” on page 93
+“User Accounts” on page 94
+“Services” on page 95
+“Diagnostics” on page 105
+“Device Discovery” on page 106
