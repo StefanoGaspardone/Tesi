@@ -1597,7 +1597,7 @@ static CandMap find_candidates(const SeqList *sl, const int min_len, const int m
     if(nthreads > sl->n) nthreads = sl->n > 0 ? sl->n : 1;
     if(nthreads < 1) nthreads = 1;
 
-    if(nthreads <= 1) {
+    if(nthreads <= 1 || sl->n < 32) {
         candmap_init(&full, 256);
         find_candidates_range(sl, 0, sl->n, min_len, max_len, &full);
     } else {
@@ -1830,7 +1830,7 @@ static void score_candidates(const CandMap *cm, const SeqList *sl, const int64_t
     if(nthreads > cm->n) nthreads = cm->n;
     if(nthreads < 1) nthreads = 1;
 
-    if(nthreads <= 1) {
+    if(nthreads <= 1 || cm->n < 32) {
         ScoreArg a = { .cm = cm, .sl = sl, .tok_freqs_raw = tok_freqs_raw, .D = D, .encoding = encoding, .char_bit_len_by_byte = char_bit_len_by_byte, .out = out, .idx_from = 0, .idx_to = cm->n, .fixed_token_bits_after = fixed_token_bits_after };
         score_candidates_thread(&a);
 
@@ -2015,7 +2015,7 @@ static void memo_rehash(MemoTable *m, const size_t newcap) {
     m->cap = newcap;
 }
 
-static MemoEntry *memo_find(MemoTable *m, const uint8_t *key, const size_t keylen) {
+static MemoEntry *memo_find(const MemoTable *m, const uint8_t *key, const size_t keylen) {
     const uint64_t h = fnv1a(key, (int)keylen);
     size_t idx = h % m->cap;
     const size_t start = idx;
@@ -2719,7 +2719,7 @@ int main(const int argc, char **argv) {
     }
 
     const int encoding = encoding_from_name(encoding_name);
-    if (encoding < 0) {
+    if(encoding < 0) {
         fprintf(stderr, "%s: --encoding invalid: %s\n", argv[0], encoding_name);
         return 2;
     }
