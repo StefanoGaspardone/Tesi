@@ -770,8 +770,35 @@ static int *huffman_len_lengths(const int64_t *freq_raw, const int count) {
     for(int i = 0; i < count; i++) full[i] = freq_raw[i] != 0 ? freq_raw[i] : 1;
 
     int *lengths = huffman_lengths(full, count);
-
     free(full);
+
+    int max_len_found = 0;
+    for(int i = 0; i < count; i++) if(lengths[i] > max_len_found) max_len_found = lengths[i];
+
+    if(max_len_found <= 15) return lengths;
+
+    for(int i = 0; i < count; i++) if(lengths[i] > 15) lengths[i] = 15;
+
+    const int64_t target = 1LL << 15;
+    for(;;) {
+        int64_t kraft_sum = 0;
+        for(int i = 0; i < count; i++) kraft_sum += (1LL << (15 - lengths[i]));
+
+        if(kraft_sum <= target) break;
+
+        int best_sym = -1;
+        for(int i = 0; i < count; i++) {
+            if(lengths[i] >= 15) continue;
+            
+            if(best_sym < 0 || lengths[i] > lengths[best_sym] ||
+               (lengths[i] == lengths[best_sym] && i > best_sym)) {
+                best_sym = i;
+            }
+        }
+
+        lengths[best_sym] += 1;
+    }
+
     return lengths;
 }
 
@@ -1723,14 +1750,17 @@ static int64_t score_dictionary_bits(const Dictionary *dict, const SeqList *sl, 
     int64_t stream_bits = 0;
     for(int i = 0; i < sl->n; i++) {
         const Seq *seq = &sl->seqs[i];
-        stream_bits += (int64_t)varint_size((uint64_t)seq->len) * 8;
+        const int64_t seq_header_bits = (int64_t)varint_size((uint64_t)seq->len) * 8;
 
+        int64_t seq_body_bits = 0;
         for(int k = 0; k < seq->len; k++) {
-            stream_bits += 1;
+            seq_body_bits += 1;
 
-            if(seq->items[k].type == RAW) stream_bits += char_bit_len_by_byte[(uint8_t)seq->items[k].val];
-            else stream_bits += tok_bits[seq->items[k].val];
+            if(seq->items[k].type == RAW) seq_body_bits += char_bit_len_by_byte[(uint8_t)seq->items[k].val];
+            else seq_body_bits += tok_bits[seq->items[k].val];
         }
+
+        stream_bits += seq_header_bits + ((seq_body_bits + 7) / 8) * 8;
     }
 
     free(tok_freqs);
