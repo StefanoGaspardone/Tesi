@@ -275,7 +275,24 @@ def _huffman_freq_lengths(freqs: dict, count: int) -> dict:
     return huffman_lengths(dict(enumerate(normalize_freqs(freqs, count))))
 
 def _huffman_len_lengths(freqs: dict, count: int) -> dict:
-    return huffman_lengths({i: freqs.get(i, 1) for i in range(count)})
+    lengths = huffman_lengths({i: freqs.get(i, 1) for i in range(count)})
+    if not lengths or max(lengths.values(), default = 0) <= 15:
+        return lengths
+    
+    new_lengths = {sym: min(L, 15) for sym, L in lengths.items()}
+    target = 1 << 15
+    
+    while True:
+        kraft_sum = sum(1 << (15 - L) for L in new_lengths.values())
+        
+        if kraft_sum <= target:
+            break
+            
+        candidates = [sym for sym, L in new_lengths.items() if L < 15]
+        best_sym = max(candidates, key = lambda s: (new_lengths[s], s))
+        new_lengths[best_sym] += 1
+        
+    return new_lengths
 
 def _fixed_write_symbol(bw: BitWriter, sym_id: int, codes: dict, fixed_bits: int):
     bw.write_bits(sym_id, fixed_bits)
@@ -599,21 +616,23 @@ def score_dictionary_bits(dictionary: list, seqs: list, char_bit_lengths: dict, 
     D = len(dictionary)
     codec = CODECS[encoding]
     
-    tok_freqs = count_tok_freqs(seqs)
-    tok_bits = codec['token_lengths'](tok_freqs, D)
+    tok_bits = codec['token_lengths'](count_tok_freqs(seqs), D)
     
     dict_bits = codec['overhead_bits'](D)
     for entry in dictionary:
-        dict_bits += varint_size(len(entry)) * 8
-        dict_bits += sum(char_bit_lengths[b] for b in entry)
+        entry_raw_bits = (varint_size(len(entry)) * 8) + sum(char_bit_lengths[b] for b in entry)
+        dict_bits += entry_raw_bits
     
     stream_bits = 0
     for seq in seqs:
-        stream_bits += varint_size(len(seq)) * 8
+        seq_header_bits = varint_size(len(seq)) * 8
         
+        seq_body_bits = 0
         for typ, val in seq:
-            stream_bits += 1
-            stream_bits += char_bit_lengths[val] if typ == RAW else tok_bits[val]
+            seq_body_bits += 1
+            seq_body_bits += char_bit_lengths[val] if typ == RAW else tok_bits[val]
+            
+        stream_bits += seq_header_bits + ((seq_body_bits + 7) // 8) * 8
     
     return dict_bits + stream_bits
 
