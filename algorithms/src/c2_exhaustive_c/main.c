@@ -1988,8 +1988,9 @@ static void gb_push_byte(GrowBuf *g, const uint8_t b) {
     g->data[g->len++] = b;
 }
 
-static void serialize_state_key(const Dictionary *dct, const SeqList *sqs, GrowBuf *out) {
+static void serialize_state_key(const Dictionary *dct, const SeqList *sqs, const int depth, GrowBuf *out) {
     gb_init(out, 1024);
+    gb_push_uvarint(out, (uint64_t)depth);
     gb_push_uvarint(out, (uint64_t)dct->n);
 
     for(int i = 0; i < dct->n; i++) {
@@ -2142,7 +2143,7 @@ static DfsResult dfs_run(DfsCtx *ctx, const Dictionary *dct, const SeqList *sqs,
     ctx->nodes++;
 
     GrowBuf key;
-    serialize_state_key(dct, sqs, &key);
+    serialize_state_key(dct, sqs, depth, &key);
 
     const MemoEntry *hit = memo_find(&ctx->memo, key.data, key.len);
     if(hit) {

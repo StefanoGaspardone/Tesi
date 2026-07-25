@@ -778,8 +778,8 @@ def exhaustive_build(byte_strings: list, char_bit_lengths: dict, encoding: int, 
     memo: dict = {}
     stats = {'nodes': 0, 'pruned_bb': 0, 'memo_hits': 0}
     
-    def state_key(dct: list, sqs: list) -> tuple:
-        return (tuple(dct), tuple(tuple(seq) for seq in sqs))
+    def state_key(dct: list, sqs: list, depth: int) -> tuple:
+        return (depth, tuple(dct), tuple(tuple(seq) for seq in sqs))
     
     def compute_ub_gain(candidates: dict, sqs: list) -> float:
         total = 0.0
@@ -796,7 +796,7 @@ def exhaustive_build(byte_strings: list, char_bit_lengths: dict, encoding: int, 
     def dfs(dct: list, sqs: list, current_bits: int, depth: int) -> tuple:
         stats['nodes'] += 1
         
-        key = state_key(dct, sqs)
+        key = state_key(dct, sqs, depth)
         if key in memo:
             stats['memo_hits'] += 1
             return memo[key]
