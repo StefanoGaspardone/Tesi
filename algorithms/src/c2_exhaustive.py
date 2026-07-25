@@ -620,8 +620,9 @@ def score_dictionary_bits(dictionary: list, seqs: list, char_bit_lengths: dict, 
     
     dict_bits = codec['overhead_bits'](D)
     for entry in dictionary:
-        entry_raw_bits = (varint_size(len(entry)) * 8) + sum(char_bit_lengths[b] for b in entry)
-        dict_bits += entry_raw_bits
+        entry_header_bits = varint_size(len(entry)) * 8
+        entry_body_bits = sum(char_bit_lengths[b] for b in entry)
+        dict_bits += entry_header_bits + ((entry_body_bits + 7) // 8) * 8
     
     stream_bits = 0
     for seq in seqs:

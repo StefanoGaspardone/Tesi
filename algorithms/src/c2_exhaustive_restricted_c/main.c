@@ -1743,8 +1743,12 @@ static int64_t score_dictionary_bits(const Dictionary *dict, const SeqList *sl, 
 
     int64_t dict_bits = codec_overhead_bits(encoding, D);
     for(int i = 0; i < D; i++) {
-        dict_bits += (int64_t)varint_size((uint64_t)dict->entries[i].len) * 8;
-        for(int k = 0; k < dict->entries[i].len; k++) dict_bits += char_bit_len_by_byte[dict->entries[i].data[k]];
+        const int64_t entry_header_bits = (int64_t)varint_size((uint64_t)dict->entries[i].len) * 8;
+        int64_t entry_body_bits = 0;
+
+        for(int k = 0; k < dict->entries[i].len; k++) entry_body_bits += char_bit_len_by_byte[dict->entries[i].data[k]];
+
+        dict_bits += entry_header_bits + ((entry_body_bits + 7) / 8) * 8;
     }
 
     int64_t stream_bits = 0;
