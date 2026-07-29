@@ -11,7 +11,6 @@ import logging
 from datetime import datetime
 from collections import defaultdict
 from pathlib import Path
-from typing import Any
 
 MAGIC = b"SDB1"
 VERSION = 1
@@ -768,7 +767,7 @@ def greedy_build(byte_strings: list, char_bit_lengths: dict, encoding: int, min_
 # ---------------------------
 # DFS Branch & Bound
 # ---------------------------
-def exhaustive_build(byte_strings: list, char_bit_lengths: dict, encoding: int, min_len: int = 2, max_len: int = 32, max_dict: int = 1023, max_depth: int | None = None) -> tuple:
+def build_dictionary(byte_strings: list, char_bit_lengths: dict, encoding: int, min_len: int = 2, max_len: int = 32, max_dict: int = 1023, max_depth: int | None = None) -> tuple:
     if max_depth == 0:
         return greedy_build(byte_strings, char_bit_lengths, encoding, min_len, max_len, max_dict)
     
@@ -895,7 +894,7 @@ def encode_onefile(input_txt: str, output_bin: str, min_len: int = 2, max_len: i
     char_bit_lengths = compute_char_bit_lengths(alphabet, char_freqs, encoding)
     
     max_d = None if exh_max_depth < 0 else exh_max_depth
-    dictionary, seqs = exhaustive_build(byte_strings, char_bit_lengths, encoding, min_len, max_len, max_dict, max_d)
+    dictionary, seqs = build_dictionary(byte_strings, char_bit_lengths, encoding, min_len, max_len, max_dict, max_d)
     
     D = len(dictionary)
     token_bits = needed_bits(D)

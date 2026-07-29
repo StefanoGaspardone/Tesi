@@ -604,7 +604,7 @@ def split_strings(strings: list[bytes]) -> tuple[list[bytes], dict[bytes, int]]:
                 char_map[char]['post'].append(s[i + 1])
     
     separators = []
-    final_dict = {}
+    initial_dict = {}
     
     for char, data in char_map.items():
         pre_unique  = len(set(data['pre']))  == len(data['pre'])
@@ -612,7 +612,7 @@ def split_strings(strings: list[bytes]) -> tuple[list[bytes], dict[bytes, int]]:
         
         if pre_unique and post_unique:
             separators.append(char)
-            final_dict[char] = data['count']
+            initial_dict[char] = data['count']
     
     if not separators:
         return strings, {}
@@ -625,14 +625,14 @@ def split_strings(strings: list[bytes]) -> tuple[list[bytes], dict[bytes, int]]:
             if p:
                 new_strings.append(p)
     
-    return new_strings, final_dict
+    return new_strings, initial_dict
 
 # ---------------------------
 # Partizioni
 # ---------------------------
 def get_partitions(s: bytes) -> list:
     n = len(s)
-    result = []
+    partitions = []
     
     for mask in range(1 << (n - 1)):
         partition = []
@@ -640,13 +640,13 @@ def get_partitions(s: bytes) -> list:
         
         for j in range(n - 1):
             if (mask >> j) & 1:
-                partition.append(s[start : j + 1])
+                partition.append(s[start : j+1])
                 start = j + 1
         
         partition.append(s[start:])
-        result.append(partition)
+        partitions.append(partition)
     
-    return result
+    return partitions
 
 # ---------------------------
 # Scoring
@@ -686,7 +686,7 @@ def build_dictionary(byte_strings: list, char_bit_lengths: dict, encoding: int, 
     for parts in all_partitions:
         n_combinations *= len(parts)
     
-    logging.info(f"Sottosequenze: {len(byte_strings)}, combinazioni: {n_combinations:,}")
+    logging.info(f"Strings: {len(byte_strings)}, combinations: {n_combinations:,}")
     
     best_score = None
     best_combination = None

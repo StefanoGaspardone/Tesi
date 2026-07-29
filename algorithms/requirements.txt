@@ -1,4 +1,0 @@
-zstandard
-pytest
-
-# pip install -r requirements.txt
