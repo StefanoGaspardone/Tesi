@@ -298,7 +298,7 @@ def main():
     setup_logger(args.input)
 
     if args.mode == "compress":
-        out = args.output or f"baseline_zstd_{args.input.split('.')[0]}_compressed.bin"
+        out = args.output or f"zstd_{args.input.split('.')[0]}_compressed.bin"
         encode_onefile(args.input, out, args.level, args.dict_mode, args.dict_size)
     else:
         strings = decompress_onefile(args.input)
