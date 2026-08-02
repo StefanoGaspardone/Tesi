@@ -55,6 +55,134 @@ static void log_line(const char *fmt, ...) {
     va_end(ap2);
 }
 
+typedef struct {
+    pthread_t *threads;
+    int capacity;
+
+    void (*fn)(void *);
+    void **args;
+    int n_active;
+
+    int round;
+    int done_count;
+    int shutdown;
+
+    pthread_mutex_t mutex;
+    pthread_cond_t cond_start;
+    pthread_cond_t cond_done;
+} ThreadPool;
+
+static ThreadPool g_pool;
+
+typedef struct { ThreadPool *pool; int id; } PoolWorkerCtx;
+
+static void *pool_worker(void *argp) {
+    PoolWorkerCtx *wc = (PoolWorkerCtx *)argp;
+    ThreadPool *p = wc->pool;
+    const int id = wc->id;
+    int last_round = 0;
+
+    for(;;) {
+        pthread_mutex_lock(&p->mutex);
+
+        while(p->round == last_round && !p->shutdown) {
+            pthread_cond_wait(&p->cond_start, &p->mutex);
+        }
+
+        if(p->shutdown) {
+            pthread_mutex_unlock(&p->mutex);
+            break;
+        }
+
+        last_round = p->round;
+        void (*fn)(void *) = p->fn;
+        const int active = (id < p->n_active);
+        void *arg = active ? p->args[id] : NULL;
+
+        pthread_mutex_unlock(&p->mutex);
+
+        if(active) {
+            fn(arg);
+
+            pthread_mutex_lock(&p->mutex);
+            p->done_count += 1;
+            
+            if(p->done_count == p->n_active) pthread_cond_signal(&p->cond_done);
+            
+            pthread_mutex_unlock(&p->mutex);
+        }
+    }
+
+    free(wc);
+    return NULL;
+}
+
+static void pool_init(int nthreads) {
+    if(nthreads < 1) nthreads = 1;
+
+    g_pool.capacity = nthreads;
+    g_pool.threads = (pthread_t *)malloc(sizeof(pthread_t) * nthreads);
+    g_pool.fn = NULL;
+    g_pool.args = NULL;
+    g_pool.n_active = 0;
+    g_pool.round = 0;
+    g_pool.done_count = 0;
+    g_pool.shutdown = 0;
+
+    pthread_mutex_init(&g_pool.mutex, NULL);
+    pthread_cond_init(&g_pool.cond_start, NULL);
+    pthread_cond_init(&g_pool.cond_done, NULL);
+
+    for(int i = 0; i < nthreads; i++) {
+        PoolWorkerCtx *wc = (PoolWorkerCtx *)malloc(sizeof(PoolWorkerCtx));
+        
+        wc->pool = &g_pool;
+        wc->id = i;
+        
+        pthread_create(&g_pool.threads[i], NULL, pool_worker, wc);
+    }
+}
+
+static void pool_shutdown(void) {
+    if(!g_pool.threads) return;
+
+    pthread_mutex_lock(&g_pool.mutex);
+    
+    g_pool.shutdown = 1;
+    
+    pthread_cond_broadcast(&g_pool.cond_start);
+    pthread_mutex_unlock(&g_pool.mutex);
+
+    for(int i = 0; i < g_pool.capacity; i++) pthread_join(g_pool.threads[i], NULL);
+
+    free(g_pool.threads);
+    g_pool.threads = NULL;
+
+    pthread_mutex_destroy(&g_pool.mutex);
+    pthread_cond_destroy(&g_pool.cond_start);
+    pthread_cond_destroy(&g_pool.cond_done);
+}
+
+static void pool_run(void (*fn)(void *), void **args, const int n) {
+    if(n <= 0) return;
+
+    pthread_mutex_lock(&g_pool.mutex);
+
+    g_pool.fn = fn;
+    g_pool.args = args;
+    g_pool.n_active = n;
+    g_pool.done_count = 0;
+    g_pool.round += 1;
+
+    pthread_cond_broadcast(&g_pool.cond_start);
+
+    while(g_pool.done_count < g_pool.n_active) {
+        pthread_cond_wait(&g_pool.cond_done, &g_pool.mutex);
+    }
+
+    pthread_mutex_unlock(&g_pool.mutex);
+}
+
 #define PROJECT_ROOT_LEVELS 4
 
 static void get_executable_path(char *out, const size_t outsz) {
@@ -431,7 +559,7 @@ static void hheap_init(HHeap *h, const int cap) {
 }
 
 static int hnode_less(const HNode *a, const HNode *b) {
-    if(a->freq != b->freq) return a->freq < b->freq;
+    if (a->freq != b->freq) return a->freq < b->freq;
     return a->tie < b->tie;
 }
 
@@ -1608,13 +1736,11 @@ typedef struct {
     CandMap local;
 } FindCandArg;
 
-static void *find_candidates_thread(void *arg) {
+static void find_candidates_task(void *arg) {
     FindCandArg *a = arg;
 
     candmap_init(&a->local, 256);
     find_candidates_range(a->sl, a->seq_from, a->seq_to, a->min_len, a->max_len, &a->local);
-
-    return NULL;
 }
 
 static CandMap find_candidates(const SeqList *sl, const int min_len, const int max_len) {
@@ -1628,8 +1754,8 @@ static CandMap find_candidates(const SeqList *sl, const int min_len, const int m
         candmap_init(&full, 256);
         find_candidates_range(sl, 0, sl->n, min_len, max_len, &full);
     } else {
-        pthread_t threads[nthreads];
         FindCandArg args[nthreads];
+        void *argptrs[nthreads];
 
         const int base = sl->n / nthreads, rem = sl->n % nthreads;
         int start = 0;
@@ -1642,16 +1768,16 @@ static CandMap find_candidates(const SeqList *sl, const int min_len, const int m
             args[t].seq_to = start + cnt;
             args[t].min_len = min_len;
             args[t].max_len = max_len;
+            argptrs[t] = &args[t];
 
             start += cnt;
-            pthread_create(&threads[t], NULL, find_candidates_thread, &args[t]);
         }
+
+        pool_run(find_candidates_task, argptrs, nthreads);
 
         candmap_init(&full, 256);
 
         for(int t = 0; t < nthreads; t++) {
-            pthread_join(threads[t], NULL);
-
             candmap_merge_from(&full, &args[t].local);
             candmap_free(&args[t].local);
         }
@@ -1828,7 +1954,7 @@ typedef struct {
     int fixed_token_bits_after;
 } ScoreArg;
 
-static void *score_candidates_thread(void *argp) {
+static void score_candidates_task(void *argp) {
     const ScoreArg *a = argp;
 
     for(int i = a->idx_from; i < a->idx_to; i++) {
@@ -1853,8 +1979,6 @@ static void *score_candidates_thread(void *argp) {
         a->out[i].gain = gain;
         a->out[i].valid = 1;
     }
-
-    return NULL;
 }
 
 static void score_candidates(const CandMap *cm, const SeqList *sl, const int64_t *tok_freqs_raw, const int D, const int encoding, const int *char_bit_len_by_byte, const int fixed_token_bits_after, CandScore *out) {
@@ -1866,13 +1990,13 @@ static void score_candidates(const CandMap *cm, const SeqList *sl, const int64_t
 
     if(nthreads <= 1 || cm->n < 32) {
         ScoreArg a = { .cm = cm, .sl = sl, .tok_freqs_raw = tok_freqs_raw, .D = D, .encoding = encoding, .char_bit_len_by_byte = char_bit_len_by_byte, .out = out, .idx_from = 0, .idx_to = cm->n, .fixed_token_bits_after = fixed_token_bits_after };
-        score_candidates_thread(&a);
+        score_candidates_task(&a);
 
         return;
     }
 
-    pthread_t threads[nthreads];
     ScoreArg args[nthreads];
+    void *argptrs[nthreads];
     const int base = cm->n / nthreads, rem = cm->n % nthreads;
     int start = 0;
 
@@ -1880,12 +2004,12 @@ static void score_candidates(const CandMap *cm, const SeqList *sl, const int64_t
         const int cnt = base + (t < rem ? 1 : 0);
 
         args[t] = (ScoreArg){ .cm = cm, .sl = sl, .tok_freqs_raw = tok_freqs_raw, .D = D, .encoding = encoding, .char_bit_len_by_byte = char_bit_len_by_byte, .out = out, .idx_from = start, .idx_to = start + cnt, .fixed_token_bits_after = fixed_token_bits_after };
-        start += cnt;
+        argptrs[t] = &args[t];
 
-        pthread_create(&threads[t], NULL, score_candidates_thread, &args[t]);
+        start += cnt;
     }
 
-    for(int t = 0; t < nthreads; t++) pthread_join(threads[t], NULL);
+    pool_run(score_candidates_task, argptrs, nthreads);
 }
 
 /* ============================================================
@@ -2760,6 +2884,7 @@ int main(const int argc, char **argv) {
     }
 
     g_nthreads = detect_nthreads();
+    pool_init(g_nthreads);
     setup_logger(input);
 
     char project_root[4096];
@@ -2826,5 +2951,7 @@ int main(const int argc, char **argv) {
     }
 
     if(g_logfile) fclose(g_logfile);
+    pool_shutdown();
+
     return 0;
 }
