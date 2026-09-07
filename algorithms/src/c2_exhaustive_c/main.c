@@ -1,3 +1,6 @@
+// cmake .. -DCMAKE_BUILD_TYPE=Release
+// cmake --build . -$(nproc)
+
 #define _GNU_SOURCE
 
 #include <stdio.h>
@@ -2083,147 +2086,6 @@ static void greedy_build(const StrItem *strs, const int nstrs, const int *char_b
 /* ============================================================
  * DFS Branch & Bound
  * ============================================================ */
-typedef struct { uint8_t *data; size_t len; size_t cap; } GrowBuf;
-
-static void gb_init(GrowBuf *g, const size_t cap) {
-    g->cap = cap > 0 ? cap : 256;
-    g->data = (uint8_t *)malloc(g->cap);
-    g->len = 0;
-}
-static void gb_ensure(GrowBuf *g, const size_t extra) {
-    if(g->len + extra > g->cap) {
-        while(g->len + extra > g->cap) g->cap *= 2;
-        g->data = (uint8_t *)realloc(g->data, g->cap);
-    }
-}
-static void gb_push_bytes(GrowBuf *g, const uint8_t *b, const size_t n) {
-    gb_ensure(g, n);
-    memcpy(g->data + g->len, b, n);
-    g->len += n;
-}
-static void gb_push_uvarint(GrowBuf *g, const uint64_t x) {
-    uint8_t tmp[16];
-    const size_t n = uvarint_encode(x, tmp);
-
-    gb_push_bytes(g, tmp, n);
-}
-static void gb_push_byte(GrowBuf *g, const uint8_t b) {
-    gb_ensure(g, 1);
-    g->data[g->len++] = b;
-}
-
-static void serialize_state_key(const Dictionary *dct, const SeqList *sqs, const int depth, GrowBuf *out) {
-    gb_init(out, 1024);
-    gb_push_uvarint(out, (uint64_t)depth);
-    gb_push_uvarint(out, (uint64_t)dct->n);
-
-    for(int i = 0; i < dct->n; i++) {
-        gb_push_uvarint(out, (uint64_t)dct->entries[i].len);
-        gb_push_bytes(out, dct->entries[i].data, (size_t)dct->entries[i].len);
-    }
-
-    gb_push_uvarint(out, (uint64_t)sqs->n);
-    for(int i = 0; i < sqs->n; i++) {
-        const Seq *seq = &sqs->seqs[i];
-        gb_push_uvarint(out, (uint64_t)seq->len);
-
-        for(int k = 0; k < seq->len; k++) {
-            gb_push_byte(out, seq->items[k].type);
-            gb_push_uvarint(out, (uint64_t)seq->items[k].val);
-        }
-    }
-}
-
-typedef struct {
-    uint8_t *key; size_t keylen;
-    int64_t bits;
-    Dictionary dict;
-    SeqList seqs;
-    int used;
-} MemoEntry;
-
-typedef struct {
-    MemoEntry *entries;
-    size_t cap;
-    size_t count;
-} MemoTable;
-
-static void memo_init(MemoTable *m, const size_t cap) {
-    m->cap = cap > 0 ? cap : 1024;
-    m->entries = (MemoEntry *)calloc(m->cap, sizeof(MemoEntry));
-    m->count = 0;
-}
-
-static void memo_rehash(MemoTable *m, const size_t newcap) {
-    MemoEntry *newentries = calloc(newcap, sizeof(MemoEntry));
-
-    for(size_t i = 0; i < m->cap; i++) {
-        if(!m->entries[i].used) continue;
-
-        const uint64_t h = fnv1a(m->entries[i].key, (int)m->entries[i].keylen);
-        size_t idx = h % newcap;
-
-        while(newentries[idx].used) idx = (idx + 1) % newcap;
-
-        newentries[idx] = m->entries[i];
-    }
-
-    free(m->entries);
-
-    m->entries = newentries;
-    m->cap = newcap;
-}
-
-static MemoEntry *memo_find(const MemoTable *m, const uint8_t *key, const size_t keylen) {
-    const uint64_t h = fnv1a(key, (int)keylen);
-    size_t idx = h % m->cap;
-    const size_t start = idx;
-
-    while(m->entries[idx].used) {
-        if(m->entries[idx].keylen == keylen && memcmp(m->entries[idx].key, key, keylen) == 0) return &m->entries[idx];
-
-        idx = (idx + 1) % m->cap;
-        if(idx == start) break;
-    }
-
-    return NULL;
-}
-
-static void memo_insert(MemoTable *m, const uint8_t *key, const size_t keylen, const int64_t bits, const Dictionary *dict, const SeqList *seqs) {
-    if(m->count * 2 >= m->cap) memo_rehash(m, m->cap * 2);
-
-    const uint64_t h = fnv1a(key, (int)keylen);
-    size_t idx = h % m->cap;
-
-    while(m->entries[idx].used) idx = (idx + 1) % m->cap;
-    m->entries[idx].key = (uint8_t *)malloc(keylen > 0 ? keylen : 1);
-
-    memcpy(m->entries[idx].key, key, keylen);
-
-    m->entries[idx].keylen = keylen;
-    m->entries[idx].bits = bits;
-    m->entries[idx].dict = dict_clone(dict);
-    m->entries[idx].seqs = seqlist_clone(seqs);
-    m->entries[idx].used = 1;
-    m->count++;
-}
-
-static void memo_free(MemoTable *m) {
-    for(size_t i = 0; i < m->cap; i++) {
-        if(m->entries[i].used) {
-            free(m->entries[i].key);
-            dict_free(&m->entries[i].dict);
-            seqlist_free(&m->entries[i].seqs);
-        }
-    }
-
-    free(m->entries);
-
-    m->entries = NULL;
-    m->cap = 0;
-    m->count = 0;
-}
-
 typedef struct {
     const StrItem *strs;
     int nstrs;
@@ -2232,8 +2094,7 @@ typedef struct {
     int min_len, max_len, max_dict;
     int max_depth;
     int max_depth_is_none;
-    MemoTable memo;
-    int64_t nodes, pruned_bb, memo_hits;
+    int64_t nodes, pruned_bb;
 } DfsCtx;
 
 typedef struct { int64_t bits; Dictionary dict; SeqList seqs; } DfsResult;
@@ -2266,21 +2127,6 @@ static int scoreditem_cmp_desc(const void *a, const void *b) {
 static DfsResult dfs_run(DfsCtx *ctx, const Dictionary *dct, const SeqList *sqs, const int64_t current_bits, const int depth) {
     ctx->nodes++;
 
-    GrowBuf key;
-    serialize_state_key(dct, sqs, depth, &key);
-
-    const MemoEntry *hit = memo_find(&ctx->memo, key.data, key.len);
-    if(hit) {
-        ctx->memo_hits++;
-        DfsResult r;
-        r.bits = hit->bits;
-        r.dict = dict_clone(&hit->dict);
-        r.seqs = seqlist_clone(&hit->seqs);
-
-        free(key.data);
-        return r;
-    }
-
     Dictionary base_dct; SeqList base_sqs;
     greedy_build(ctx->strs, ctx->nstrs, ctx->char_bit_len_by_byte, ctx->encoding, ctx->min_len, ctx->max_len, ctx->max_dict, dct, sqs, &base_dct, &base_sqs);
     const int64_t base_bits = score_dictionary_bits(&base_dct, &base_sqs, ctx->char_bit_len_by_byte, ctx->encoding);
@@ -2291,16 +2137,10 @@ static DfsResult dfs_run(DfsCtx *ctx, const Dictionary *dct, const SeqList *sqs,
     best_local.seqs = base_sqs;
 
     if(dct->n >= ctx->max_dict) {
-        memo_insert(&ctx->memo, key.data, key.len, best_local.bits, &best_local.dict, &best_local.seqs);
-        free(key.data);
-
         return best_local;
     }
 
     if(!ctx->max_depth_is_none && depth >= ctx->max_depth) {
-        memo_insert(&ctx->memo, key.data, key.len, best_local.bits, &best_local.dict, &best_local.seqs);
-        free(key.data);
-
         return best_local;
     }
 
@@ -2308,9 +2148,6 @@ static DfsResult dfs_run(DfsCtx *ctx, const Dictionary *dct, const SeqList *sqs,
 
     if(candidates.n == 0) {
         candmap_free(&candidates);
-        memo_insert(&ctx->memo, key.data, key.len, best_local.bits, &best_local.dict, &best_local.seqs);
-        free(key.data);
-
         return best_local;
     }
 
@@ -2318,11 +2155,7 @@ static DfsResult dfs_run(DfsCtx *ctx, const Dictionary *dct, const SeqList *sqs,
 
     if((double)current_bits - ub_gain_bits >= (double)base_bits) {
         ctx->pruned_bb++;
-
         candmap_free(&candidates);
-        memo_insert(&ctx->memo, key.data, key.len, best_local.bits, &best_local.dict, &best_local.seqs);
-        free(key.data);
-
         return best_local;
     }
 
@@ -2349,11 +2182,7 @@ static DfsResult dfs_run(DfsCtx *ctx, const Dictionary *dct, const SeqList *sqs,
 
     if(nscored == 0) {
         free(scored);
-
         candmap_free(&candidates);
-        memo_insert(&ctx->memo, key.data, key.len, best_local.bits, &best_local.dict, &best_local.seqs);
-
-        free(key.data);
         return best_local;
     }
 
@@ -2388,8 +2217,6 @@ static DfsResult dfs_run(DfsCtx *ctx, const Dictionary *dct, const SeqList *sqs,
     free(scored);
     candmap_free(&candidates);
 
-    memo_insert(&ctx->memo, key.data, key.len, best_local.bits, &best_local.dict, &best_local.seqs);
-    free(key.data);
     return best_local;
 }
 
@@ -2408,9 +2235,7 @@ static void exhaustive_build(const StrItem *strs, const int nstrs, const int *ch
     ctx.encoding = encoding;
     ctx.min_len = min_len; ctx.max_len = max_len; ctx.max_dict = max_dict;
     ctx.max_depth = max_depth; ctx.max_depth_is_none = max_depth_is_none;
-
-    memo_init(&ctx.memo, 1024);
-    ctx.nodes = ctx.pruned_bb = ctx.memo_hits = 0;
+    ctx.nodes = ctx.pruned_bb = 0;
 
     Dictionary empty_dict; dict_init(&empty_dict, 4);
     const int64_t init_bits = score_dictionary_bits(&empty_dict, &init_seqs, char_bit_len_by_byte, encoding);
@@ -2419,9 +2244,8 @@ static void exhaustive_build(const StrItem *strs, const int nstrs, const int *ch
 
     dict_free(&empty_dict);
     seqlist_free(&init_seqs);
-    memo_free(&ctx.memo);
 
-    log_line("DFS: nodes = %lld, pruned = %lld, memo_hits = %lld", (long long)ctx.nodes, (long long)ctx.pruned_bb, (long long)ctx.memo_hits);
+    log_line("DFS: nodes = %lld, pruned = %lld", (long long)ctx.nodes, (long long)ctx.pruned_bb);
 
     *out_dict = result.dict;
     *out_seqs = result.seqs;

@@ -4,6 +4,7 @@
 import argparse
 import ast
 import ctypes
+import platform
 import time
 import os
 import logging
@@ -86,9 +87,81 @@ def varint_size(x: int) -> int:
 # ---------------------------
 # Ponte ctypes verso libbrotlienc / libbrotlidec
 # ---------------------------
+def _candidate_names(base: str) -> list:
+    system = platform.system()
+
+    if system == "Windows":
+        # Nomi possibili a seconda di come sono state ottenute le DLL
+        # (MSYS2/MinGW usa il prefisso "lib", vcpkg no).
+        return [f"{base}.dll", f"lib{base}.dll", f"{base}-1.dll", f"lib{base}-1.dll"]
+    elif system == "Darwin":
+        return [f"lib{base}.1.dylib", f"lib{base}.dylib"]
+    else:
+        return [f"lib{base}.so.1", f"lib{base}.so"]
+
+def _windows_extra_dll_dirs() -> list:
+    candidates = [
+        os.environ.get("MSYS2_ROOT"),
+        r"C:\msys64\mingw64\bin",
+        r"C:\msys64\ucrt64\bin",
+        r"C:\DevTools\msys2\mingw64\bin",
+        r"C:\DevTools\msys2\ucrt64\bin",
+    ]
+    return [c for c in candidates if c and os.path.isdir(c)]
+
+def _load_one(base: str):
+    tried = []
+
+    def try_names():
+        for name in _candidate_names(base):
+            try:
+                return ctypes.CDLL(name)
+            except OSError as e:
+                tried.append((name, str(e)))
+        return None
+
+    lib = try_names()
+    added_dirs = []
+
+    if lib is None and platform.system() == "Windows" and hasattr(os, "add_dll_directory"):
+        for d in _windows_extra_dll_dirs():
+            try:
+                os.add_dll_directory(d)
+                added_dirs.append(d)
+            except OSError:
+                pass
+
+        if added_dirs:
+            tried.clear()
+            lib = try_names()
+
+    if lib is not None:
+        return lib
+
+    system = platform.system()
+
+    if system == "Windows":
+        hint = (
+            "Su Windows queste DLL non sono incluse di default. Se hai gia' MSYS2 "
+            "installato (usato anche per compilare c2.dll), il modo piu' semplice e':\n"
+            "  pacman -S mingw-w64-x86_64-brotli\n"
+            + (f"(gia' cercate anche in: {', '.join(added_dirs)}, senza successo)\n" if added_dirs else
+               "Le cartelle MSYS2 abituali (C:\\msys64\\mingw64\\bin, C:\\msys64\\ucrt64\\bin) "
+               "non sono state trovate su questo sistema: se MSYS2 e' installato altrove, "
+               "imposta la variabile d'ambiente MSYS2_ROOT alla cartella bin corretta, oppure "
+               "copia le DLL (incluse le loro dipendenze) nella stessa cartella di questo file.")
+        )
+    elif system == "Darwin":
+        hint = "Su macOS: brew install brotli"
+    else:
+        hint = "Su Linux: apt install libbrotli1 (o l'equivalente della tua distro)"
+
+    details = "\n".join(f"  - {name}: {err}" for name, err in tried)
+    raise OSError(f"Impossibile caricare la libreria nativa '{base}'. Nomi provati:\n{details}\n\n{hint}")
+
 def _load_brotli_native():
-    lib_enc = ctypes.CDLL("libbrotlienc.so.1")
-    lib_dec = ctypes.CDLL("libbrotlidec.so.1")
+    lib_enc = _load_one("brotlienc")
+    lib_dec = _load_one("brotlidec")
 
     lib_enc.BrotliEncoderCreateInstance.restype = c_void_p
     lib_enc.BrotliEncoderCreateInstance.argtypes = [c_void_p, c_void_p, c_void_p]
@@ -102,6 +175,8 @@ def _load_brotli_native():
     lib_enc.BrotliEncoderCompressStream.argtypes = [c_void_p, c_int, POINTER(c_size_t), POINTER(POINTER(c_uint8)), POINTER(c_size_t), POINTER(POINTER(c_uint8)), c_void_p]
     lib_enc.BrotliEncoderDestroyInstance.argtypes = [c_void_p]
     lib_enc.BrotliEncoderDestroyPreparedDictionary.argtypes = [c_void_p]
+    lib_enc.BrotliEncoderIsFinished.restype = c_int
+    lib_enc.BrotliEncoderIsFinished.argtypes = [c_void_p]
 
     lib_dec.BrotliDecoderCreateInstance.restype = c_void_p
     lib_dec.BrotliDecoderCreateInstance.argtypes = [c_void_p, c_void_p, c_void_p]
@@ -117,88 +192,96 @@ _LIB_ENC, _LIB_DEC = _load_brotli_native()
 
 def compress_one(data: bytes, zdict: bytes, quality: int, lgwin: int) -> bytes:
     state = _LIB_ENC.BrotliEncoderCreateInstance(None, None, None)
-    _LIB_ENC.BrotliEncoderSetParameter(state, BROTLI_PARAM_QUALITY, quality)
-    _LIB_ENC.BrotliEncoderSetParameter(state, BROTLI_PARAM_LGWIN, lgwin)
-
     prepared = None
 
-    if zdict:
-        dict_buf = (c_uint8 * len(zdict)).from_buffer_copy(zdict)
-        prepared = _LIB_ENC.BrotliEncoderPrepareDictionary(
-            BROTLI_SHARED_DICTIONARY_RAW, len(zdict),
-            ctypes.cast(dict_buf, POINTER(c_uint8)), quality, None, None, None)
+    try:
+        _LIB_ENC.BrotliEncoderSetParameter(state, BROTLI_PARAM_QUALITY, quality)
+        _LIB_ENC.BrotliEncoderSetParameter(state, BROTLI_PARAM_LGWIN, lgwin)
 
-        if not prepared:
-            raise RuntimeError("BrotliEncoderPrepareDictionary fallita")
+        if zdict:
+            dict_buf = (c_uint8 * len(zdict)).from_buffer_copy(zdict)
+            prepared = _LIB_ENC.BrotliEncoderPrepareDictionary(
+                BROTLI_SHARED_DICTIONARY_RAW, len(zdict),
+                ctypes.cast(dict_buf, POINTER(c_uint8)), quality, None, None, None)
 
-        if not _LIB_ENC.BrotliEncoderAttachPreparedDictionary(state, prepared):
-            raise RuntimeError("BrotliEncoderAttachPreparedDictionary fallita")
+            if not prepared:
+                raise RuntimeError("BrotliEncoderPrepareDictionary fallita")
 
-    in_buf = (c_uint8 * max(1, len(data))).from_buffer_copy(data)
-    avail_in = c_size_t(len(data))
-    next_in = ctypes.cast(in_buf, POINTER(c_uint8))
+            if not _LIB_ENC.BrotliEncoderAttachPreparedDictionary(state, prepared):
+                raise RuntimeError("BrotliEncoderAttachPreparedDictionary fallita")
 
-    cap = len(data) * 2 + 1024
-    out_buf = (c_uint8 * cap)()
-    avail_out = c_size_t(cap)
-    next_out = ctypes.cast(out_buf, POINTER(c_uint8))
+        # ctypes gestisce correttamente array di lunghezza 0 -- niente bisogno
+        # di un max(1, ...): forzare una capacita' di 1 byte mentre si copiano
+        # 0 byte fa fallire from_buffer_copy su stringhe vuote.
+        in_buf = (c_uint8 * len(data)).from_buffer_copy(data)
+        avail_in = c_size_t(len(data))
+        next_in = ctypes.cast(in_buf, POINTER(c_uint8))
 
-    ok = _LIB_ENC.BrotliEncoderCompressStream(
-        state, BROTLI_OPERATION_FINISH,
-        byref(avail_in), byref(next_in), byref(avail_out), byref(next_out), None)
+        cap = len(data) * 2 + 1024
+        out_buf = (c_uint8 * cap)()
+        avail_out = c_size_t(cap)
+        next_out = ctypes.cast(out_buf, POINTER(c_uint8))
 
-    if not ok:
-        raise RuntimeError("BrotliEncoderCompressStream fallita")
+        ok = _LIB_ENC.BrotliEncoderCompressStream(
+            state, BROTLI_OPERATION_FINISH,
+            byref(avail_in), byref(next_in), byref(avail_out), byref(next_out), None)
 
-    produced = cap - avail_out.value
-    result = bytes(out_buf[:produced])
+        if not ok:
+            raise RuntimeError("BrotliEncoderCompressStream fallita")
 
-    if prepared:
-        _LIB_ENC.BrotliEncoderDestroyPreparedDictionary(prepared)
+        # Senza questo controllo, un buffer di output troppo piccolo farebbe
+        # tornare un output silenziosamente troncato (CompressStream puo'
+        # restituire successo anche se lo stream non e' ancora completo).
+        if not _LIB_ENC.BrotliEncoderIsFinished(state):
+            raise RuntimeError("BrotliEncoderCompressStream non ha completato lo stream (buffer di output insufficiente?)")
 
-    _LIB_ENC.BrotliEncoderDestroyInstance(state)
-
-    return result
+        produced = cap - avail_out.value
+        return bytes(out_buf[:produced])
+    finally:
+        if prepared:
+            _LIB_ENC.BrotliEncoderDestroyPreparedDictionary(prepared)
+        _LIB_ENC.BrotliEncoderDestroyInstance(state)
 
 def decompress_one(data: bytes, zdict: bytes) -> bytes:
     state = _LIB_DEC.BrotliDecoderCreateInstance(None, None, None)
 
-    if zdict:
-        dict_buf = (c_uint8 * len(zdict)).from_buffer_copy(zdict)
+    try:
+        if zdict:
+            dict_buf = (c_uint8 * len(zdict)).from_buffer_copy(zdict)
 
-        if not _LIB_DEC.BrotliDecoderAttachDictionary(
-            state, BROTLI_SHARED_DICTIONARY_RAW, len(zdict), ctypes.cast(dict_buf, POINTER(c_uint8))
-        ):
-            raise RuntimeError("BrotliDecoderAttachDictionary fallita")
+            if not _LIB_DEC.BrotliDecoderAttachDictionary(
+                state, BROTLI_SHARED_DICTIONARY_RAW, len(zdict), ctypes.cast(dict_buf, POINTER(c_uint8))
+            ):
+                raise RuntimeError("BrotliDecoderAttachDictionary fallita")
 
-    in_buf = (c_uint8 * max(1, len(data))).from_buffer_copy(data)
-    avail_in = c_size_t(len(data))
-    next_in = ctypes.cast(in_buf, POINTER(c_uint8))
+        in_buf = (c_uint8 * len(data)).from_buffer_copy(data)
+        avail_in = c_size_t(len(data))
+        next_in = ctypes.cast(in_buf, POINTER(c_uint8))
 
-    out = bytearray()
+        out = bytearray()
 
-    while True:
-        chunk_cap = 65536
-        out_buf = (c_uint8 * chunk_cap)()
-        avail_out = c_size_t(chunk_cap)
-        next_out = ctypes.cast(out_buf, POINTER(c_uint8))
+        while True:
+            chunk_cap = 65536
+            out_buf = (c_uint8 * chunk_cap)()
+            avail_out = c_size_t(chunk_cap)
+            next_out = ctypes.cast(out_buf, POINTER(c_uint8))
 
-        res = _LIB_DEC.BrotliDecoderDecompressStream(
-            state, byref(avail_in), byref(next_in), byref(avail_out), byref(next_out), None)
+            res = _LIB_DEC.BrotliDecoderDecompressStream(
+                state, byref(avail_in), byref(next_in), byref(avail_out), byref(next_out), None)
 
-        produced = chunk_cap - avail_out.value
-        out += bytes(out_buf[:produced])
+            produced = chunk_cap - avail_out.value
+            out += bytes(out_buf[:produced])
 
-        if res == 1:  # BROTLI_DECODER_RESULT_SUCCESS
-            break
-        elif res == 3:  # BROTLI_DECODER_RESULT_NEEDS_MORE_OUTPUT
-            continue
-        else:
-            raise RuntimeError(f"BrotliDecoderDecompressStream errore (result={res})")
+            if res == 1:  # BROTLI_DECODER_RESULT_SUCCESS
+                break
+            elif res == 3:  # BROTLI_DECODER_RESULT_NEEDS_MORE_OUTPUT
+                continue
+            else:
+                raise RuntimeError(f"BrotliDecoderDecompressStream errore (result={res})")
 
-    _LIB_DEC.BrotliDecoderDestroyInstance(state)
-
-    return bytes(out)
+        return bytes(out)
+    finally:
+        _LIB_DEC.BrotliDecoderDestroyInstance(state)
 
 # ---------------------------
 # I/O stringhe (stessa logica degli altri script)

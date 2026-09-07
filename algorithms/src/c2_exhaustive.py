@@ -774,11 +774,7 @@ def build_dictionary(byte_strings: list, char_bit_lengths: dict, encoding: int, 
     init_seqs = initial_sequences(byte_strings)
     codec = CODECS[encoding]
     
-    memo: dict = {}
-    stats = {'nodes': 0, 'pruned_bb': 0, 'memo_hits': 0}
-    
-    def state_key(dct: list, sqs: list, depth: int) -> tuple:
-        return (depth, tuple(dct), tuple(tuple(seq) for seq in sqs))
+    stats = {'nodes': 0, 'pruned_bb': 0}
     
     def compute_ub_gain(candidates: dict, sqs: list) -> float:
         total = 0.0
@@ -795,35 +791,25 @@ def build_dictionary(byte_strings: list, char_bit_lengths: dict, encoding: int, 
     def dfs(dct: list, sqs: list, current_bits: int, depth: int) -> tuple:
         stats['nodes'] += 1
         
-        key = state_key(dct, sqs, depth)
-        if key in memo:
-            stats['memo_hits'] += 1
-            return memo[key]
-        
         base_dct, base_sqs = greedy_build(byte_strings, char_bit_lengths, encoding, min_len, max_len, max_dict, list(dct), list(sqs))
         base_bits = score_dictionary_bits(base_dct, base_sqs, char_bit_lengths, encoding)
         best_local = (base_bits, list(base_dct), base_sqs)
         
         if len(dct) >= max_dict:
-            memo[key] = best_local
             return best_local
         
         if max_depth is not None and depth >= max_depth:
-            memo[key] = best_local
             return best_local
         
         candidates = find_candidates(sqs, min_len, max_len)
         
         if not candidates:
-            memo[key] = best_local
             return best_local
         
         ub_gain_bits = compute_ub_gain(candidates, sqs)
         
         if current_bits - ub_gain_bits >= base_bits:
             stats['pruned_bb'] += 1
-            memo[key] = best_local
-            
             return best_local
         
         D = len(dct)
@@ -842,7 +828,6 @@ def build_dictionary(byte_strings: list, char_bit_lengths: dict, encoding: int, 
                 scored.append((gain, pat))
         
         if not scored:
-            memo[key] = best_local
             return best_local
         
         scored.sort(key = lambda x: x[0], reverse = True)
@@ -857,13 +842,12 @@ def build_dictionary(byte_strings: list, char_bit_lengths: dict, encoding: int, 
             if cand_bits < best_local[0]:
                 best_local = (cand_bits, cand_dct, cand_sqs)
         
-        memo[key] = best_local
         return best_local
     
     init_bits = score_dictionary_bits([], init_seqs, char_bit_lengths, encoding)
     _best_bits, best_dict, best_seqs = dfs([], init_seqs, init_bits, 0)
     
-    logging.info(f"DFS: nodes = {stats['nodes']}, pruned = {stats['pruned_bb']}, memo_hits = {stats['memo_hits']}")
+    logging.info(f"DFS: nodes = {stats['nodes']}, pruned = {stats['pruned_bb']}")
     
     return best_dict, best_seqs
 
