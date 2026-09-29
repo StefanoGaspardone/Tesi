@@ -57,40 +57,57 @@ def setup_logger(input_filename):
             logging.StreamHandler(),
         ],
     )
-
-# ---------------------------
-# Varint (LEB128 unsigned)
-# ---------------------------
-def uvarint_encode(x: int) -> bytes:
-    out = bytearray()
     
+# ---------------------
+# Exponential encoding
+# ---------------------
+
+EXP_N0 = 4
+
+def exp_size(x: int, n0: int = EXP_N0) -> int:
+    n = n0
+    total_bits = 0
+    first_ext = True
     while True:
-        b = x & 0x7F
-        x >>= 7
-        
-        out.append(b | 0x80 if x else b)
-        
-        if not x:
-            break
-    
-    return bytes(out)
+        threshold = (1 << n) - 1
+        total_bits += n
+        if x < threshold:
+            return total_bits
+        x -= threshold
+        if first_ext:
+            first_ext = False
+        else:
+            n *= 2
 
-def uvarint_decode(data: bytes, pos: int):
-    x = 0
-    shift = 0
-    
+def exp_write(bw, x: int, n0: int = EXP_N0):
+    n = n0
+    first_ext = True
     while True:
-        b = data[pos]
-        pos += 1
-        x |= (b & 0x7F) << shift
-        
-        if not (b & 0x80):
-            return x, pos
-        
-        shift += 7
+        threshold = (1 << n) - 1
+        if x < threshold:
+            bw.write_bits(x, n)
+            return
+        bw.write_bits(threshold, n)
+        x -= threshold
+        if first_ext:
+            first_ext = False
+        else:
+            n *= 2
 
-def varint_size(x: int) -> int:
-    return len(uvarint_encode(x))
+def exp_read(br, n0: int = EXP_N0) -> int:
+    n = n0
+    total = 0
+    first_ext = True
+    while True:
+        v = br.read_bits(n)
+        threshold = (1 << n) - 1
+        if v < threshold:
+            return total + v
+        total += threshold
+        if first_ext:
+            first_ext = False
+        else:
+            n *= 2
 
 def needed_bits(n: int) -> int:
     return 1 if n <= 1 else math.ceil(math.log2(n))
@@ -496,73 +513,68 @@ def build_alphabet(byte_strings: list, sort_by_freq: bool = False) -> tuple:
 def write_alphabet_section(bw: BitWriter, alphabet: bytes, char_freqs: dict, encoding: int):
     A = len(alphabet)
     
-    bw.write_bytes_aligned(uvarint_encode(A))
+    exp_write(bw, A)
     bw.write_bytes_aligned(alphabet)
     
     CODECS[encoding]['write_overhead'](bw, char_freqs, A)
 
-def read_alphabet_section(data: bytes, pos: int, encoding: int) -> tuple:
-    A, pos = uvarint_decode(data, pos)
-    alphabet = data[pos : pos + A]
-    pos += A
+def read_alphabet_section(br: BitReader, encoding: int) -> tuple:
+    A = exp_read(br)
+    br.align_to_byte()
+    alphabet = br.read_bytes_aligned(A)
     
     if A == 0:
         alphabet = b"\x00"
         A = 1
     
     codec = CODECS[encoding]
-    br_tmp = BitReader(data, pos)
-    lengths = codec['read_overhead'](br_tmp, A)
-    pos = br_tmp.pos
-    
+    lengths = codec['read_overhead'](br, A)
     decoder = codec['decoder_from_lengths'](lengths, A)
     
-    return alphabet, decoder, pos
+    return alphabet, decoder
 
 # ---------------------------
 # Dictionary
 # ---------------------------
 def write_dictionary_section(bw: BitWriter, dictionary: list, byte_to_id: dict, tok_freqs: dict, char_codes: dict, char_bits: int, encoding: int):
     D = len(dictionary)
-    bw.write_bytes_aligned(uvarint_encode(D))
-    
+    exp_write(bw, D)
+
     for entry in dictionary:
-        bw.write_bytes_aligned(uvarint_encode(len(entry)))
+        exp_write(bw, len(entry))
         
         for b in entry:
             write_sym(bw, byte_to_id[b], encoding, char_codes, char_bits)
-    
+
     CODECS[encoding]['write_overhead'](bw, tok_freqs, D)
 
 def read_dictionary_section(br: BitReader, alphabet: bytes, char_decoder: dict, encoding: int, num_entries: int) -> tuple:
     dictionary = []
-    
+
     for _ in range(num_entries):
-        br.align_to_byte()
-        L, br.pos = uvarint_decode(br.data, br.pos)
-        
+        L = exp_read(br)
         entry = bytearray()
+        
         for _ in range(L):
             cid = read_sym(br, encoding, char_decoder)
             entry.append(alphabet[cid])
         
         dictionary.append(bytes(entry))
-    
+
     codec = CODECS[encoding]
-    br.align_to_byte()
     lengths = codec['read_overhead'](br, num_entries)
     tok_decoder = codec['decoder_from_lengths'](lengths, num_entries)
-    
+
     return dictionary, tok_decoder
 
 # ---------------------------
 # Stream
 # ---------------------------
 def write_stream(bw: BitWriter, seqs: list, byte_to_id: dict, char_codes: dict, char_bits: int, tok_codes: dict, token_bits: int, encoding: int):
-    bw.write_bytes_aligned(uvarint_encode(len(seqs)))
-    
+    exp_write(bw, len(seqs))
+
     for seq in seqs:
-        bw.write_bytes_aligned(uvarint_encode(len(seq)))
+        exp_write(bw, len(seq))
         
         for typ, val in seq:
             if typ == RAW:
@@ -573,17 +585,13 @@ def write_stream(bw: BitWriter, seqs: list, byte_to_id: dict, char_codes: dict, 
                 write_sym(bw, val, encoding, tok_codes, token_bits)
 
 def read_stream(br: BitReader, alphabet: bytes, dictionary: list, encoding: int, char_decoder: dict, tok_decoder: dict) -> list:
-    br.align_to_byte()
-    N, br.pos = uvarint_decode(br.data, br.pos)
-    
+    N = exp_read(br)
     out_strings = []
-    
+
     for _ in range(N):
-        br.align_to_byte()
-        S, br.pos = uvarint_decode(br.data, br.pos)
-        
+        S = exp_read(br)
         out = bytearray()
-        
+
         for _ in range(S):
             flag = br.read_bits(1)
             
@@ -593,9 +601,9 @@ def read_stream(br: BitReader, alphabet: bytes, dictionary: list, encoding: int,
             else:
                 tid = read_sym(br, encoding, tok_decoder)
                 out.extend(dictionary[tid])
-        
+
         out_strings.append(out.decode("utf-8"))
-    
+
     return out_strings
 
 # ---------------------------
@@ -614,26 +622,26 @@ def count_tok_freqs(seqs: list) -> dict:
 def score_dictionary_bits(dictionary: list, seqs: list, char_bit_lengths: dict, encoding: int) -> int:
     D = len(dictionary)
     codec = CODECS[encoding]
-    
+
     tok_bits = codec['token_lengths'](count_tok_freqs(seqs), D)
-    
+
     dict_bits = codec['overhead_bits'](D)
     for entry in dictionary:
-        entry_header_bits = varint_size(len(entry)) * 8
+        entry_header_bits = exp_size(len(entry))
         entry_body_bits = sum(char_bit_lengths[b] for b in entry)
-        dict_bits += entry_header_bits + ((entry_body_bits + 7) // 8) * 8
-    
+        dict_bits += entry_header_bits + entry_body_bits
+
     stream_bits = 0
     for seq in seqs:
-        seq_header_bits = varint_size(len(seq)) * 8
-        
+        seq_header_bits = exp_size(len(seq))
+
         seq_body_bits = 0
         for typ, val in seq:
             seq_body_bits += 1
             seq_body_bits += char_bit_lengths[val] if typ == RAW else tok_bits[val]
-            
-        stream_bits += seq_header_bits + ((seq_body_bits + 7) // 8) * 8
-    
+
+        stream_bits += seq_header_bits + seq_body_bits
+
     return dict_bits + stream_bits
 
 def token_bits_for_candidate(codec: dict, tok_freqs: dict, d: int, occ: int) -> int:
@@ -645,11 +653,11 @@ def token_bits_for_candidate(codec: dict, tok_freqs: dict, d: int, occ: int) -> 
 def scoring_function(pat_bytes: bytes, occ: int, char_bit_lengths: dict, token_bits_after: int) -> float:
     L = len(pat_bytes)
     pat_bits = sum(char_bit_lengths[b] for b in pat_bytes)
-    
+
     old_cost = occ * (L + pat_bits)
     new_cost = occ * (1 + token_bits_after)
-    dict_cost = (varint_size(L) * 8) + pat_bits
-    
+    dict_cost = exp_size(L) + pat_bits
+
     return old_cost - new_cost - dict_cost
 
 # ---------------------------
@@ -738,13 +746,14 @@ def greedy_build(byte_strings: list, char_bit_lengths: dict, encoding: int, min_
         
         for pat in candidates:
             occ = total_non_overlapping(seqs, pat)
+            
             if occ < 2:
                 continue
             
             token_bits_after = token_bits_for_candidate(codec, tok_freqs, D, occ)
             gain = scoring_function(pat, occ, char_bit_lengths, token_bits_after)
             
-            if gain > best_gain:
+            if gain > best_gain or (gain == best_gain and (best is None or pat < best)):
                 best_gain = gain
                 best = pat
         
@@ -930,30 +939,29 @@ def encode_onefile(input_txt: str, output_bin: str, min_len: int = 2, max_len: i
 
 def decompress_onefile(path_bin: str) -> list:
     full_path = os.path.join("..", "outputs", path_bin)
-    
+
     with open(full_path, "rb") as f:
         data = f.read()
-    
+
     pos = 0
-    
+
     if data[pos : pos+4] != MAGIC:
         raise ValueError("MAGIC non valido")
-    
+
     pos += 4
     ver = data[pos]
     pos += 1
     encoding = data[pos]
     pos += 1
-    
+
     if ver != VERSION:
         raise ValueError(f"Versione non supportata: {ver}")
-    
-    alphabet, char_decoder, pos = read_alphabet_section(data, pos, encoding)
-    D, pos = uvarint_decode(data, pos)
-    
+
     br = BitReader(data, pos)
+    alphabet, char_decoder = read_alphabet_section(br, encoding)
+    D = exp_read(br)
     dictionary, tok_decoder = read_dictionary_section(br, alphabet, char_decoder, encoding, D)
-    
+
     return read_stream(br, alphabet, dictionary, encoding, char_decoder, tok_decoder)
 
 # ---------------------------

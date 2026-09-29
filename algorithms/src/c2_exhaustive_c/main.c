@@ -1,5 +1,5 @@
 // cmake .. -DCMAKE_BUILD_TYPE=Release
-// cmake --build . -$(nproc)
+// cmake --build . -j $(nproc)
 
 #define _GNU_SOURCE
 
@@ -109,9 +109,9 @@ static void *pool_worker(void *argp) {
 
             pthread_mutex_lock(&p->mutex);
             p->done_count += 1;
-            
+
             if(p->done_count == p->n_active) pthread_cond_signal(&p->cond_done);
-            
+
             pthread_mutex_unlock(&p->mutex);
         }
     }
@@ -138,10 +138,10 @@ static void pool_init(int nthreads) {
 
     for(int i = 0; i < nthreads; i++) {
         PoolWorkerCtx *wc = (PoolWorkerCtx *)malloc(sizeof(PoolWorkerCtx));
-        
+
         wc->pool = &g_pool;
         wc->id = i;
-        
+
         pthread_create(&g_pool.threads[i], NULL, pool_worker, wc);
     }
 }
@@ -150,9 +150,9 @@ static void pool_shutdown(void) {
     if(!g_pool.threads) return;
 
     pthread_mutex_lock(&g_pool.mutex);
-    
+
     g_pool.shutdown = 1;
-    
+
     pthread_cond_broadcast(&g_pool.cond_start);
     pthread_mutex_unlock(&g_pool.mutex);
 
@@ -348,41 +348,9 @@ static void setup_logger(const char *input_filename) {
 }
 
 /* ============================================================
- * Varint (LEB128 unsigned)
+ * Exponential encoding
  * ============================================================ */
-static size_t uvarint_encode(uint64_t x, uint8_t *out) {
-    size_t n = 0;
-
-    for(;;) {
-        const uint8_t b = (uint8_t)(x & 0x7F);
-        x >>= 7;
-        out[n++] = x ? (uint8_t)(b | 0x80) : b;
-
-        if(!x) break;
-    }
-
-    return n;
-}
-
-static uint64_t uvarint_decode(const uint8_t *data, size_t *pos) {
-    uint64_t x = 0;
-    int shift = 0;
-
-    for(;;) {
-        const uint8_t b = data[*pos];
-        (*pos)++;
-        x |= (uint64_t)(b & 0x7F) << shift;
-
-        if(!(b & 0x80)) return x;
-
-        shift += 7;
-    }
-}
-
-static size_t varint_size(uint64_t x) {
-    uint8_t tmp[16];
-    return uvarint_encode(x, tmp);
-}
+#define EXP_N0 4
 
 static int needed_bits(int64_t n) {
     if(n <= 1) return 1;
@@ -449,12 +417,6 @@ static void bw_write_bytes_aligned(BitWriter *bw, const uint8_t *b, const size_t
     bw->len += n;
 }
 
-static void bw_write_uvarint_aligned(BitWriter *bw, const uint64_t x) {
-    uint8_t tmp[16];
-    const size_t n = uvarint_encode(x, tmp);
-    bw_write_bytes_aligned(bw, tmp, n);
-}
-
 static uint8_t *bw_getvalue(BitWriter *bw, size_t *outlen) {
     bw_flush_to_byte(bw);
     *outlen = bw->len;
@@ -506,8 +468,60 @@ static const uint8_t *br_read_bytes_aligned(BitReader *br, const size_t n) {
     return p;
 }
 
-static uint64_t br_read_uvarint_aligned(BitReader *br) {
-    return uvarint_decode(br->data, &br->pos);
+static int exp_size(uint64_t x) {
+    int n = EXP_N0;
+    int total_bits = 0;
+    int first_ext = 1;
+
+    for(;;) {
+        const uint64_t threshold = (1ULL << n) - 1;
+        total_bits += n;
+
+        if(x < threshold) return total_bits;
+
+        x -= threshold;
+
+        if(first_ext) first_ext = 0;
+        else n *= 2;
+    }
+}
+
+static void exp_write(BitWriter *bw, uint64_t x) {
+    int n = EXP_N0;
+    int first_ext = 1;
+
+    for(;;) {
+        const uint64_t threshold = (1ULL << n) - 1;
+
+        if(x < threshold) {
+            bw_write_bits(bw, x, n);
+            return;
+        }
+
+        bw_write_bits(bw, threshold, n);
+        x -= threshold;
+
+        if(first_ext) first_ext = 0;
+        else n *= 2;
+    }
+}
+
+static uint64_t exp_read(BitReader *br) {
+    int n = EXP_N0;
+    uint64_t total = 0;
+    int first_ext = 1;
+
+    for(;;) {
+        const uint64_t v = br_read_bits(br, n);
+        const uint64_t threshold = (1ULL << n) - 1;
+
+        if(v < threshold) return total + v;
+
+        total += threshold;
+
+        if(first_ext) first_ext = 0;
+        else n *= 2;
+    }
 }
 
 /* ============================================================
@@ -920,7 +934,7 @@ static int *huffman_len_lengths(const int64_t *freq_raw, const int count) {
         int best_sym = -1;
         for(int i = 0; i < count; i++) {
             if(lengths[i] >= 15) continue;
-            
+
             if(best_sym < 0 || lengths[i] > lengths[best_sym] ||
                (lengths[i] == lengths[best_sym] && i > best_sym)) {
                 best_sym = i;
@@ -1140,7 +1154,7 @@ static int codec_overhead_bits(const int encoding, const int count) {
     return 0;
 }
 
-static void compute_char_bit_lengths(const uint8_t *alphabet, const int A, const int *char_lengths_by_id, int *byte_len_out /* [256] */) {
+static void compute_char_bit_lengths(const uint8_t *alphabet, const int A, const int *char_lengths_by_id, int *byte_len_out) {
     for(int i = 0; i < A; i++) byte_len_out[alphabet[i]] = char_lengths_by_id[i];
 }
 
@@ -1473,7 +1487,7 @@ static void build_alphabet(const StrItem *strs, const int n, const int sort_by_f
     memcpy(out->char_freq_by_byte, freq, sizeof(freq));
 }
 
-static void alphabet_char_freq_by_id(const Alphabet *alph, int64_t *out /* [A] */) {
+static void alphabet_char_freq_by_id(const Alphabet *alph, int64_t *out) {
     for(int i = 0; i < alph->A; i++) out[i] = alph->char_freq_by_byte[alph->alphabet[i]];
 }
 
@@ -1881,18 +1895,18 @@ static int64_t score_dictionary_bits(const Dictionary *dict, const SeqList *sl, 
 
     int64_t dict_bits = codec_overhead_bits(encoding, D);
     for(int i = 0; i < D; i++) {
-        const int64_t entry_header_bits = (int64_t)varint_size((uint64_t)dict->entries[i].len) * 8;
+        const int64_t entry_header_bits = (int64_t)exp_size((uint64_t)dict->entries[i].len);
         int64_t entry_body_bits = 0;
 
         for(int k = 0; k < dict->entries[i].len; k++) entry_body_bits += char_bit_len_by_byte[dict->entries[i].data[k]];
 
-        dict_bits += entry_header_bits + ((entry_body_bits + 7) / 8) * 8;
+        dict_bits += entry_header_bits + entry_body_bits;
     }
 
     int64_t stream_bits = 0;
     for(int i = 0; i < sl->n; i++) {
         const Seq *seq = &sl->seqs[i];
-        const int64_t seq_header_bits = (int64_t)varint_size((uint64_t)seq->len) * 8;
+        const int64_t seq_header_bits = (int64_t)exp_size((uint64_t)seq->len);
 
         int64_t seq_body_bits = 0;
         for(int k = 0; k < seq->len; k++) {
@@ -1902,7 +1916,7 @@ static int64_t score_dictionary_bits(const Dictionary *dict, const SeqList *sl, 
             else seq_body_bits += tok_bits[seq->items[k].val];
         }
 
-        stream_bits += seq_header_bits + ((seq_body_bits + 7) / 8) * 8;
+        stream_bits += seq_header_bits + seq_body_bits;
     }
 
     free(tok_freqs);
@@ -1934,7 +1948,7 @@ static int64_t scoring_function(const uint8_t *pat, const int L, const int64_t o
 
     const int64_t old_cost = occ * (L + pat_bits);
     const int64_t new_cost = occ * (1 + token_bits_after);
-    const int64_t dict_cost = (int64_t)varint_size((uint64_t)L) * 8 + pat_bits;
+    const int64_t dict_cost = (int64_t)exp_size((uint64_t)L) + pat_bits;
 
     return old_cost - new_cost - dict_cost;
 }
@@ -2310,7 +2324,7 @@ static void reorder_dict_for_positional(Dictionary *dict, SeqList *seqs, int64_t
  * ============================================================ */
 static void write_alphabet_section(BitWriter *bw, const Alphabet *alph, const int encoding) {
     const int A = alph->A;
-    bw_write_uvarint_aligned(bw, (uint64_t)A);
+    exp_write(bw, (uint64_t)A);
     bw_write_bytes_aligned(bw, alph->alphabet, (size_t)A);
 
     int64_t char_freq_by_id[256];
@@ -2324,23 +2338,19 @@ typedef struct {
     Decoder decoder;
 } ReadAlphabetResult;
 
-static ReadAlphabetResult read_alphabet_section(const uint8_t *data, size_t *pos, const int encoding) {
+static ReadAlphabetResult read_alphabet_section(BitReader *br, const int encoding) {
     ReadAlphabetResult r = {0};
-    const uint64_t A64 = uvarint_decode(data, pos);
-    int A = (int)A64;
+    int A = (int)exp_read(br);
 
-    memcpy(r.alphabet, data + *pos, (size_t)A);
-    *pos += (size_t)A;
+    const uint8_t *raw = br_read_bytes_aligned(br, (size_t)A);
+    memcpy(r.alphabet, raw, (size_t)A);
 
     if(A == 0) {
         r.alphabet[0] = 0;
         A = 1;
     }
 
-    BitReader br_tmp;
-    br_init(&br_tmp, data, SIZE_MAX, *pos);
-    int *lengths = codec_read_overhead(encoding, &br_tmp, A);
-    *pos = br_tmp.pos;
+    int *lengths = codec_read_overhead(encoding, br, A);
 
     r.A = A;
     r.decoder = codec_decoder_from_lengths(encoding, lengths, A);
@@ -2351,10 +2361,10 @@ static ReadAlphabetResult read_alphabet_section(const uint8_t *data, size_t *pos
 
 static void write_dictionary_section(BitWriter *bw, const Dictionary *dict, const int *byte_to_id, const int64_t *tok_freqs_raw, const HCode *char_codes, const int char_bits, const int encoding) {
     const int D = dict->n;
-    bw_write_uvarint_aligned(bw, (uint64_t)D);
+    exp_write(bw, (uint64_t)D);
 
     for (int i = 0; i < D; i++) {
-        bw_write_uvarint_aligned(bw, (uint64_t)dict->entries[i].len);
+        exp_write(bw, (uint64_t)dict->entries[i].len);
 
         for(int k = 0; k < dict->entries[i].len; k++) {
             const uint8_t b = dict->entries[i].data[k];
@@ -2370,8 +2380,7 @@ static Dictionary read_dictionary_section(BitReader *br, const uint8_t *alphabet
 
     uint8_t tmpbuf[4096];
     for(int e = 0; e < num_entries; e++) {
-        br_align_to_byte(br);
-        const uint64_t L = br_read_uvarint_aligned(br);
+        const uint64_t L = exp_read(br);
 
         uint8_t *entry = L <= sizeof(tmpbuf) ? tmpbuf : malloc(L);
         for(uint64_t k = 0; k < L; k++) {
@@ -2384,7 +2393,6 @@ static Dictionary read_dictionary_section(BitReader *br, const uint8_t *alphabet
         if(entry != tmpbuf) free(entry);
     }
 
-    br_align_to_byte(br);
     int *lengths = codec_read_overhead(encoding, br, num_entries);
     *out_tok_decoder = codec_decoder_from_lengths(encoding, lengths, num_entries);
     free(lengths);
@@ -2393,11 +2401,11 @@ static Dictionary read_dictionary_section(BitReader *br, const uint8_t *alphabet
 }
 
 static void write_stream(BitWriter *bw, const SeqList *seqs, const int *byte_to_id, const HCode *char_codes, const int char_bits, const HCode *tok_codes, const int token_bits, const int encoding) {
-    bw_write_uvarint_aligned(bw, (uint64_t)seqs->n);
+    exp_write(bw, (uint64_t)seqs->n);
 
     for(int i = 0; i < seqs->n; i++) {
         const Seq *seq = &seqs->seqs[i];
-        bw_write_uvarint_aligned(bw, (uint64_t)seq->len);
+        exp_write(bw, (uint64_t)seq->len);
 
         for(int k = 0; k < seq->len; k++) {
             if(seq->items[k].type == RAW) {
@@ -2412,14 +2420,12 @@ static void write_stream(BitWriter *bw, const SeqList *seqs, const int *byte_to_
 }
 
 static StrItem *read_stream(BitReader *br, const uint8_t *alphabet, const Dictionary *dict, const int encoding, const Decoder *char_decoder, const Decoder *tok_decoder, int *out_n) {
-    br_align_to_byte(br);
-    const uint64_t N = br_read_uvarint_aligned(br);
+    const uint64_t N = exp_read(br);
 
     StrItem *out = malloc(sizeof(StrItem) * (N > 0 ? N : 1));
 
     for(uint64_t i = 0; i < N; i++) {
-        br_align_to_byte(br);
-        const uint64_t S = br_read_uvarint_aligned(br);
+        const uint64_t S = exp_read(br);
 
         ByteBuf buf; bytebuf_init(&buf, (S > 0 ? S : 1) * 4 + 16);
 
@@ -2608,12 +2614,11 @@ static StrItem *decompress_onefile(const char *project_root, const char *path_bi
         exit(1);
     }
 
-    ReadAlphabetResult ar = read_alphabet_section(data, &pos, encoding);
-
-    const uint64_t D = uvarint_decode(data, &pos);
-
     BitReader br;
     br_init(&br, data, (size_t)fsize, pos);
+
+    ReadAlphabetResult ar = read_alphabet_section(&br, encoding);
+    const uint64_t D = exp_read(&br);
 
     Decoder tok_decoder;
     Dictionary dictionary = read_dictionary_section(&br, ar.alphabet, &ar.decoder, encoding, (int)D, &tok_decoder);
