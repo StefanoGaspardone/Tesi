@@ -2032,6 +2032,14 @@ static void score_candidates(const CandMap *cm, const SeqList *sl, const int64_t
 /* ============================================================
  * greedy_build
  * ============================================================ */
+static int bytes_less(const uint8_t *a, const int alen, const uint8_t *b, const int blen) {
+    const int m = alen < blen ? alen : blen;
+    const int c = memcmp(a, b, (size_t)m);
+
+    if(c != 0) return c < 0;
+    return alen < blen;
+}
+
 static void greedy_build(const StrItem *strs, const int nstrs, const int *char_bit_len_by_byte, const int encoding, const int min_len, const int max_len, const int max_dict, const Dictionary *init_dict, const SeqList *init_seqs, Dictionary *out_dict, SeqList *out_seqs) {
     SeqList seqs = init_seqs ? seqlist_clone(init_seqs) : initial_sequences(strs, nstrs);
     Dictionary dictionary;
@@ -2054,7 +2062,11 @@ static void greedy_build(const StrItem *strs, const int nstrs, const int *char_b
         for(int i = 0; i < candidates.n; i++) {
             if(!scores[i].valid) continue;
 
-            if(scores[i].gain > best_gain) {
+            const CandEntry *e = &candidates.entries[i];
+
+            if(scores[i].gain > best_gain ||
+               (scores[i].gain == best_gain && best_idx >= 0 &&
+                bytes_less(e->key, e->keylen, candidates.entries[best_idx].key, candidates.entries[best_idx].keylen))) {
                 best_gain = scores[i].gain;
                 best_idx = i;
             }

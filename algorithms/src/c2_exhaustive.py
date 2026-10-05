@@ -666,7 +666,7 @@ def scoring_function(pat_bytes: bytes, occ: int, char_bit_lengths: dict, token_b
 def initial_sequences(byte_strings: list) -> list:
     return [[(RAW, x) for x in bs] for bs in byte_strings]
 
-def find_candidates(seqs: list, min_len: int = 2, max_len: int = 32) -> dict:
+def find_candidates(seqs: list, min_len: int = 3, max_len: int = 32) -> dict:
     counts = defaultdict(int)
     
     for seq in seqs:
@@ -729,7 +729,7 @@ def replace_non_overlapping(seqs: list, pat_bytes: bytes, token_id: int) -> list
     
     return out_all
 
-def greedy_build(byte_strings: list, char_bit_lengths: dict, encoding: int, min_len: int = 2, max_len: int = 32, max_dict: int = 1023, init_dict: list | None = None, init_seqs: list | None = None) -> tuple:
+def greedy_build(byte_strings: list, char_bit_lengths: dict, encoding: int, min_len: int = 3, max_len: int = 32, max_dict: int = 1023, init_dict: list | None = None, init_seqs: list | None = None) -> tuple:
     seqs = init_seqs[:] if init_seqs is not None else initial_sequences(byte_strings)
     dictionary = list(init_dict) if init_dict is not None else []
     codec = CODECS[encoding]
@@ -776,7 +776,7 @@ def greedy_build(byte_strings: list, char_bit_lengths: dict, encoding: int, min_
 # ---------------------------
 # DFS Branch & Bound
 # ---------------------------
-def build_dictionary(byte_strings: list, char_bit_lengths: dict, encoding: int, min_len: int = 2, max_len: int = 32, max_dict: int = 1023, max_depth: int | None = None) -> tuple:
+def build_dictionary(byte_strings: list, char_bit_lengths: dict, encoding: int, min_len: int = 3, max_len: int = 32, max_dict: int = 1023, max_depth: int | None = None) -> tuple:
     if max_depth == 0:
         return greedy_build(byte_strings, char_bit_lengths, encoding, min_len, max_len, max_dict)
     

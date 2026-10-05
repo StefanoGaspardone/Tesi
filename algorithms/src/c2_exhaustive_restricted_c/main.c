@@ -2020,6 +2020,13 @@ static void score_candidates(const CandMap *cm, const SeqList *sl, const int64_t
     pool_run(score_candidates_task, argptrs, nthreads);
 }
 
+static int bytes_less(const uint8_t *a, const int alen, const uint8_t *b, const int blen) {
+    const int m = alen < blen ? alen : blen;
+    const int c = memcmp(a, b, (size_t)m);
+    if(c != 0) return c < 0;
+    return alen < blen;
+}
+
 /* ============================================================
  * greedy_build
  * ============================================================ */
@@ -2045,7 +2052,10 @@ static void greedy_build(const StrItem *strs, const int nstrs, const int *char_b
         for(int i = 0; i < candidates.n; i++) {
             if(!scores[i].valid) continue;
 
-            if(scores[i].gain > best_gain) {
+            const CandEntry *e = &candidates.entries[i];
+            if(scores[i].gain > best_gain ||
+               (scores[i].gain == best_gain && best_idx >= 0 &&
+                bytes_less(e->key, e->keylen, candidates.entries[best_idx].key, candidates.entries[best_idx].keylen))) {
                 best_gain = scores[i].gain;
                 best_idx = i;
             }
