@@ -618,29 +618,41 @@ def count_tok_freqs(seqs: list) -> dict:
     
     return tok_freqs
 
+ALIGNED_OVERHEAD = {ENC_HUFF_FREQ, ENC_HUFF_LEN}
+ 
+def ceil_to_byte(bits: int) -> int:
+    return (bits + 7) // 8 * 8
+ 
 def score_dictionary_bits(dictionary: list, seqs: list, char_bit_lengths: dict, encoding: int) -> int:
+    """Exact size in bits of the dictionary section and of the stream, as written by encode_onefile."""
+    
     D = len(dictionary)
     codec = CODECS[encoding]
-
+ 
     tok_bits = codec['token_lengths'](count_tok_freqs(seqs), D)
-
-    dict_bits = codec['overhead_bits'](D)
+ 
+    dict_bits = exp_size(D)
     for entry in dictionary:
         entry_header_bits = exp_size(len(entry))
         entry_body_bits = sum(char_bit_lengths[b] for b in entry)
         dict_bits += entry_header_bits + entry_body_bits
-
-    stream_bits = 0
+ 
+    if encoding in ALIGNED_OVERHEAD:
+        dict_bits = ceil_to_byte(dict_bits)
+ 
+    dict_bits += codec['overhead_bits'](D)
+ 
+    stream_bits = exp_size(len(seqs))
     for seq in seqs:
         seq_header_bits = exp_size(len(seq))
-
+ 
         seq_body_bits = 0
         for typ, val in seq:
             seq_body_bits += 1
             seq_body_bits += char_bit_lengths[val] if typ == RAW else tok_bits[val]
-
+ 
         stream_bits += seq_header_bits + seq_body_bits
-
+ 
     return dict_bits + stream_bits
 
 def token_bits_for_candidate(codec: dict, tok_freqs: dict, d: int, occ: int) -> int:

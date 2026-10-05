@@ -1878,13 +1878,17 @@ static int64_t *count_tok_freqs(const SeqList *sl, const int D) {
     return out;
 }
 
+static int64_t ceil_to_byte(const int64_t bits) {
+    return (bits + 7) / 8 * 8;
+}
+
 static int64_t score_dictionary_bits(const Dictionary *dict, const SeqList *sl, const int *char_bit_len_by_byte, const int encoding) {
     const int D = dict->n;
 
     int64_t *tok_freqs = count_tok_freqs(sl, D);
     int *tok_bits = codec_token_lengths(encoding, tok_freqs, D);
 
-    int64_t dict_bits = codec_overhead_bits(encoding, D);
+    int64_t dict_bits = (int64_t)exp_size((uint64_t)D);
     for(int i = 0; i < D; i++) {
         const int64_t entry_header_bits = (int64_t)exp_size((uint64_t)dict->entries[i].len);
         int64_t entry_body_bits = 0;
@@ -1894,7 +1898,11 @@ static int64_t score_dictionary_bits(const Dictionary *dict, const SeqList *sl, 
         dict_bits += entry_header_bits + entry_body_bits;
     }
 
-    int64_t stream_bits = 0;
+    if(encoding == ENC_HUFF_FREQ || encoding == ENC_HUFF_LEN) dict_bits = ceil_to_byte(dict_bits);
+
+    dict_bits += codec_overhead_bits(encoding, D);
+
+    int64_t stream_bits = (int64_t)exp_size((uint64_t)sl->n);
     for(int i = 0; i < sl->n; i++) {
         const Seq *seq = &sl->seqs[i];
         const int64_t seq_header_bits = (int64_t)exp_size((uint64_t)seq->len);
@@ -2039,6 +2047,10 @@ static void greedy_build(const StrItem *strs, const int nstrs, const int *char_b
 
     int64_t current_bits = score_dictionary_bits(&dictionary, &seqs, char_bit_len_by_byte, encoding);
 
+    int64_t best_bits = current_bits;
+    int best_n = dictionary.n;
+    SeqList best_seqs = seqlist_clone(&seqs);
+
     while(dictionary.n < max_dict) {
         const int D = dictionary.n;
         int64_t *tok_freqs = count_tok_freqs(&seqs, D);
@@ -2080,22 +2092,26 @@ static void greedy_build(const StrItem *strs, const int nstrs, const int *char_b
 
         const int64_t trial_bits = score_dictionary_bits(&trial_dict, &trial_seqs, char_bit_len_by_byte, encoding);
 
-        if(trial_bits >= current_bits) {
-            dict_free(&trial_dict);
-            seqlist_free(&trial_seqs);
-
-            break;
-        }
-
         dict_free(&dictionary);
         seqlist_free(&seqs);
         dictionary = trial_dict;
         seqs = trial_seqs;
         current_bits = trial_bits;
+
+        if(current_bits < best_bits) {
+            best_bits = current_bits;
+            best_n = dictionary.n;
+            seqlist_free(&best_seqs);
+            best_seqs = seqlist_clone(&seqs);
+        }
     }
 
+    for(int i = best_n; i < dictionary.n; i++) free(dictionary.entries[i].data);
+    dictionary.n = best_n;
+    seqlist_free(&seqs);
+
     *out_dict = dictionary;
-    *out_seqs = seqs;
+    *out_seqs = best_seqs;
 }
 
 typedef struct { int64_t gain; int cand_idx; } ScoredItem;

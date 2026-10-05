@@ -619,19 +619,32 @@ def count_tok_freqs(seqs: list) -> dict:
     
     return tok_freqs
 
+ALIGNED_OVERHEAD = {ENC_HUFF_FREQ, ENC_HUFF_LEN}
+ALIGN_SLACK_BITS = 7
+
+def ceil_to_byte(bits: int) -> int:
+    return (bits + 7) // 8 * 8
+
 def score_dictionary_bits(dictionary: list, seqs: list, char_bit_lengths: dict, encoding: int) -> int:
+    """Exact size in bits of the dictionary section and of the stream, as written by encode_onefile."""
+    
     D = len(dictionary)
     codec = CODECS[encoding]
 
     tok_bits = codec['token_lengths'](count_tok_freqs(seqs), D)
 
-    dict_bits = codec['overhead_bits'](D)
+    dict_bits = exp_size(D)
     for entry in dictionary:
         entry_header_bits = exp_size(len(entry))
         entry_body_bits = sum(char_bit_lengths[b] for b in entry)
         dict_bits += entry_header_bits + entry_body_bits
 
-    stream_bits = 0
+    if encoding in ALIGNED_OVERHEAD:
+        dict_bits = ceil_to_byte(dict_bits)
+
+    dict_bits += codec['overhead_bits'](D)
+
+    stream_bits = exp_size(len(seqs))
     for seq in seqs:
         seq_header_bits = exp_size(len(seq))
 
@@ -735,6 +748,7 @@ def greedy_build(byte_strings: list, char_bit_lengths: dict, encoding: int, min_
     codec = CODECS[encoding]
     
     current_bits = score_dictionary_bits(dictionary, seqs, char_bit_lengths, encoding)
+    best_bits, best_dictionary, best_seqs = current_bits, dictionary, seqs
     
     while len(dictionary) < max_dict:
         D = len(dictionary)
@@ -760,18 +774,14 @@ def greedy_build(byte_strings: list, char_bit_lengths: dict, encoding: int, min_
         if best is None or best_gain <= 0:
             break
         
-        trial_dict = dictionary + [best]
-        trial_seqs = replace_non_overlapping(seqs, best, D)
-        trial_bits = score_dictionary_bits(trial_dict, trial_seqs, char_bit_lengths, encoding)
+        dictionary = dictionary + [best]
+        seqs = replace_non_overlapping(seqs, best, D)
+        current_bits = score_dictionary_bits(dictionary, seqs, char_bit_lengths, encoding)
         
-        if trial_bits >= current_bits:
-            break
-        
-        dictionary = trial_dict
-        seqs = trial_seqs
-        current_bits = trial_bits
+        if current_bits < best_bits:
+            best_bits, best_dictionary, best_seqs = current_bits, dictionary, seqs
     
-    return dictionary, seqs
+    return best_dictionary, best_seqs
 
 # ---------------------------
 # DFS Branch & Bound
@@ -817,7 +827,7 @@ def build_dictionary(byte_strings: list, char_bit_lengths: dict, encoding: int, 
         
         ub_gain_bits = compute_ub_gain(candidates, sqs)
         
-        if current_bits - ub_gain_bits >= base_bits:
+        if current_bits - ub_gain_bits - ALIGN_SLACK_BITS >= base_bits:
             stats['pruned_bb'] += 1
             return best_local
         
