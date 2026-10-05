@@ -2666,7 +2666,7 @@ int main(const int argc, char **argv) {
     const char *mode = NULL;
     const char *input = NULL;
     const char *output = NULL;
-    int min_len = 2, max_len = 32, max_dict = 1023, exh_max_depth = 0;
+    int min_len = 3, max_len = 32, max_dict = 1023, exh_max_depth = 0;
     const char *encoding_name = "fixed";
 
     const char *positionals[3];

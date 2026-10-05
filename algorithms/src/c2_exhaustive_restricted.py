@@ -849,7 +849,7 @@ def _reorder_dict_for_positional(dictionary: list, seqs: list) -> tuple:
 # ---------------------------
 # Encode / Decode
 # ---------------------------
-def encode_onefile(input_txt: str, output_bin: str, min_len: int = 2, max_len: int = 32, max_dict: int = 1023, lookahead_depth: int = 0, lookahead_topk: int = 1, encoding_name: str = 'fixed'):
+def encode_onefile(input_txt: str, output_bin: str, min_len: int = 3, max_len: int = 32, max_dict: int = 1023, lookahead_depth: int = 0, lookahead_topk: int = 1, encoding_name: str = 'fixed'):
     t_start  = time.time()
     encoding = ENC_NAME.get(encoding_name, ENC_FIXED)
     
@@ -950,7 +950,7 @@ def main():
     ap.add_argument("mode", choices = ["compress", "decompress"])
     ap.add_argument("input")
     ap.add_argument("output", nargs = "?")
-    ap.add_argument("--min-len", type = int, default = 2)
+    ap.add_argument("--min-len", type = int, default = 3)
     ap.add_argument("--max-len", type = int, default = 32)
     ap.add_argument("--max-dict", type = int, default = 1023)
     ap.add_argument("--lookahead-depth", type = int, default = 0, help = "Profondità beam (0 = greedy)")
