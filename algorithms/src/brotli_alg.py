@@ -50,39 +50,122 @@ def setup_logger(input_filename):
         ],
     )
 
-# ---------------------------
-# Varint (LEB128 unsigned)
-# ---------------------------
-def uvarint_encode(x: int) -> bytes:
-    out = bytearray()
+# ---------------------
+# Exponential encoding
+# ---------------------
 
+EXP_N0 = 4
+
+def exp_size(x: int, n0: int = EXP_N0) -> int:
+    n = n0
+    total_bits = 0
+    first_ext = True
     while True:
-        b = x & 0x7F
-        x >>= 7
+        threshold = (1 << n) - 1
+        total_bits += n
+        if x < threshold:
+            return total_bits
+        x -= threshold
+        if first_ext:
+            first_ext = False
+        else:
+            n *= 2
 
-        out.append(b | 0x80 if x else b)
-
-        if not x:
-            break
-
-    return bytes(out)
-
-def uvarint_decode(data: bytes, pos: int):
-    x = 0
-    shift = 0
-
+def exp_write(bw, x: int, n0: int = EXP_N0):
+    n = n0
+    first_ext = True
     while True:
-        b = data[pos]
-        pos += 1
-        x |= (b & 0x7F) << shift
+        threshold = (1 << n) - 1
+        if x < threshold:
+            bw.write_bits(x, n)
+            return
+        bw.write_bits(threshold, n)
+        x -= threshold
+        if first_ext:
+            first_ext = False
+        else:
+            n *= 2
 
-        if not (b & 0x80):
-            return x, pos
+def exp_read(br, n0: int = EXP_N0) -> int:
+    n = n0
+    total = 0
+    first_ext = True
+    while True:
+        v = br.read_bits(n)
+        threshold = (1 << n) - 1
+        if v < threshold:
+            return total + v
+        total += threshold
+        if first_ext:
+            first_ext = False
+        else:
+            n *= 2
 
-        shift += 7
+# ---------------------------
+# Bit packer / unpacker
+# ---------------------------
+class BitWriter:
+    def __init__(self):
+        self.buf = bytearray()
+        self.acc = 0
+        self.nbits = 0
 
-def varint_size(x: int) -> int:
-    return len(uvarint_encode(x))
+    def write_bits(self, value: int, n: int):
+        for i in reversed(range(n)):
+            self.acc = (self.acc << 1) | ((value >> i) & 1)
+            self.nbits += 1
+
+            if self.nbits == 8:
+                self.buf.append(self.acc & 0xFF)
+                self.acc = 0
+                self.nbits = 0
+
+    def write_bytes_aligned(self, b: bytes):
+        self.flush_to_byte()
+        self.buf.extend(b)
+
+    def flush_to_byte(self):
+        if self.nbits:
+            self.acc <<= (8 - self.nbits)
+            self.buf.append(self.acc & 0xFF)
+            self.acc = 0
+            self.nbits = 0
+
+    def getvalue(self) -> bytes:
+        self.flush_to_byte()
+        return bytes(self.buf)
+
+class BitReader:
+    def __init__(self, data: bytes, pos: int = 0):
+        self.data = data
+        self.pos = pos
+        self.acc = 0
+        self.nbits = 0
+
+    def read_bits(self, n: int) -> int:
+        v = 0
+
+        for _ in range(n):
+            if self.nbits == 0:
+                self.acc = self.data[self.pos]
+                self.pos += 1
+                self.nbits = 8
+
+            v = (v << 1) | ((self.acc >> (self.nbits - 1)) & 1)
+            self.nbits -= 1
+
+        return v
+
+    def read_bytes_aligned(self, n: int) -> bytes:
+        self.align_to_byte()
+
+        b = self.data[self.pos : self.pos + n]
+        self.pos += n
+
+        return b
+
+    def align_to_byte(self):
+        self.nbits = 0
 
 # ---------------------------
 # Ponte ctypes verso libbrotlienc / libbrotlidec
@@ -326,27 +409,31 @@ def encode_onefile(input_txt: str, output_bin: str, quality: int = 11, lgwin: in
 
     zdict = build_shared_dict(byte_strings)
 
-    out = bytearray()
-    out += MAGIC
-    out += bytes([VERSION])
-    out += uvarint_encode(len(zdict))
-    out += zdict
-    out += uvarint_encode(len(byte_strings))
+    # I campi di lunghezza usano la codifica esponenziale (stessa dei metodi proposti);
+    # i blocchi di byte grezzi (dizionario, stream brotli) restano allineati al byte
+    bw = BitWriter()
+    bw.write_bytes_aligned(MAGIC)
+    bw.write_bytes_aligned(bytes([VERSION]))
+    exp_write(bw, len(zdict))
+    bw.write_bytes_aligned(zdict)
+    exp_write(bw, len(byte_strings))
 
     stream_bytes = 0
 
     for bs in byte_strings:
         comp = compress_one(bs, zdict, quality, lgwin)
-        out += uvarint_encode(len(comp))
-        out += comp
+        exp_write(bw, len(comp))
+        bw.write_bytes_aligned(comp)
         stream_bytes += len(comp)
+
+    out = bw.getvalue()
 
     output_dir = os.path.join("..", "outputs")
     os.makedirs(output_dir, exist_ok = True)
     full_output_path = os.path.join(output_dir, output_bin)
 
     with open(full_output_path, "wb") as f:
-        f.write(bytes(out))
+        f.write(out)
 
     orig_bytes = sum(len(b) for b in byte_strings)
     t_elapsed = time.time() - t_start
@@ -377,18 +464,18 @@ def decompress_onefile(path_bin: str) -> list:
     if ver != VERSION:
         raise ValueError(f"Versione non supportata: {ver}")
 
-    dict_len, pos = uvarint_decode(data, pos)
-    zdict = data[pos : pos + dict_len]
-    pos += dict_len
+    br = BitReader(data, pos)
 
-    n, pos = uvarint_decode(data, pos)
+    dict_len = exp_read(br)
+    zdict = br.read_bytes_aligned(dict_len)
+
+    n = exp_read(br)
 
     out_strings = []
 
     for _ in range(n):
-        comp_len, pos = uvarint_decode(data, pos)
-        comp = data[pos : pos + comp_len]
-        pos += comp_len
+        comp_len = exp_read(br)
+        comp = br.read_bytes_aligned(comp_len)
 
         raw = decompress_one(comp, zdict)
         out_strings.append(raw.decode("utf-8"))
