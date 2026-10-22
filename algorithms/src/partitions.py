@@ -122,7 +122,7 @@ def calc_avg_char_length(strings: list[str]) -> int:
 
 
 def main():
-    path = "colonnina.txt"  # Sostituisci con il percorso del tuo file
+    path = "ciao.txt"  # Sostituisci con il percorso del tuo file
     raw_strings = read_strings_text(path)
     original_bytes = to_utf8_bytes(raw_strings)
 
@@ -143,7 +143,7 @@ def main():
     # Stampa dei risultati (3 cifre decimali passate a format_scientific)
     print(
         f"Separatori individuati ({len(separators_dict)}):"
-        f" {list(separators_dict.keys())}\n"
+        f" {separators_dict}\n"
     )
 
     print("--- PRIMA DELLO SPLIT ---")
