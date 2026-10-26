@@ -889,22 +889,20 @@ def build_dictionary(byte_strings: list, char_bit_lengths: dict, encoding: int, 
 
     stats = {'nodes': 0, 'pruned_bb': 0, 'pruned_memo': 0}
     global_best_bits = [math.inf]
-    visited = {}
+    visited = set()
     pruned = (math.inf, None, None)
 
     def dfs(dct: list, sqs: list, depth: int) -> tuple:
         stats['nodes'] += 1
 
-        remaining = math.inf if max_depth is None else max_depth - depth
         key = state_key(dct, sqs)
-        seen = visited.get(key)
 
-        if seen is not None and seen >= remaining:
+        if key in visited:
             stats['pruned_memo'] += 1
             return pruned
 
-        if seen is not None or len(visited) < memo_max_entries:
-            visited[key] = remaining
+        if len(visited) < memo_max_entries:
+            visited.add(key)
 
         candidates = find_candidates(sqs, min_len, max_len) if len(dct) < max_dict else {}
 
