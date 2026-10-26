@@ -11,9 +11,6 @@ from pathlib import Path
 
 import zstandard as zstd
 
-MAGIC = b"ZSD1"
-VERSION = 1
-
 DICT_RAW = 0
 DICT_TRAINED = 1
 
@@ -291,8 +288,7 @@ def encode_onefile(input_txt: str, output_bin: str, level: int = 22, dict_mode: 
     cctx = zstd.ZstdCompressor(level = level, dict_data = dict_obj)
 
     bw = BitWriter()
-    bw.write_bytes_aligned(MAGIC)
-    bw.write_bytes_aligned(bytes([VERSION, dict_kind]))
+    bw.write_bytes_aligned(bytes([dict_kind]))
     exp_write(bw, len(dict_raw))
     bw.write_bytes_aligned(dict_raw)
     exp_write(bw, len(byte_strings))
@@ -332,18 +328,8 @@ def decompress_onefile(path_bin: str) -> list:
         data = f.read()
 
     pos = 0
-
-    if data[pos : pos + 4] != MAGIC:
-        raise ValueError("MAGIC non valido")
-
-    pos += 4
-    ver = data[pos]
-    pos += 1
     dict_kind = data[pos]
     pos += 1
-
-    if ver != VERSION:
-        raise ValueError(f"Versione non supportata: {ver}")
 
     br = BitReader(data, pos)
 

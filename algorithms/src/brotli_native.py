@@ -11,9 +11,6 @@ from pathlib import Path
 
 import brotli
 
-MAGIC = b"BRN1"
-VERSION = 1
-
 # ---------------------------
 # Logger
 # ---------------------------
@@ -81,8 +78,6 @@ def encode_onefile(input_txt: str, output_bin: str, quality: int = 11, lgwin: in
     compressed = brotli.compress(blob, quality = quality, lgwin = lgwin)
 
     out = bytearray()
-    out += MAGIC
-    out += bytes([VERSION])
     out += compressed
 
     output_dir = os.path.join("..", "outputs")
@@ -107,14 +102,7 @@ def decompress_onefile(path_bin: str) -> list:
     with open(full_path, "rb") as f:
         data = f.read()
 
-    if data[:4] != MAGIC:
-        raise ValueError("MAGIC non valido")
-
-    ver = data[4]
-    if ver != VERSION:
-        raise ValueError(f"Versione non supportata: {ver}")
-
-    blob = brotli.decompress(data[5:])
+    blob = brotli.decompress(data)
     return blob.decode("utf-8").split("\n")
 
 # ---------------------------

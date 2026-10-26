@@ -11,9 +11,6 @@ from pathlib import Path
 
 import zstandard as zstd
 
-MAGIC = b"ZSN1"
-VERSION = 1
-
 # ---------------------------
 # Logger
 # ---------------------------
@@ -83,8 +80,6 @@ def encode_onefile(input_txt: str, output_bin: str, level: int = 22):
     compressed = cctx.compress(blob)
 
     out = bytearray()
-    out += MAGIC
-    out += bytes([VERSION])
     out += compressed
 
     output_dir = os.path.join("..", "outputs")
@@ -109,15 +104,8 @@ def decompress_onefile(path_bin: str) -> list:
     with open(full_path, "rb") as f:
         data = f.read()
 
-    if data[:4] != MAGIC:
-        raise ValueError("MAGIC non valido")
-
-    ver = data[4]
-    if ver != VERSION:
-        raise ValueError(f"Versione non supportata: {ver}")
-
     dctx = zstd.ZstdDecompressor()
-    blob = dctx.decompress(data[5:])
+    blob = dctx.decompress(data)
 
     return blob.decode("utf-8").split("\n")
 

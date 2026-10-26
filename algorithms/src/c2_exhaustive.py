@@ -12,9 +12,6 @@ from datetime import datetime
 from collections import defaultdict
 from pathlib import Path
 
-MAGIC = b"SDB1"
-VERSION = 1
-
 RAW = 0
 TOK = 1
 
@@ -918,8 +915,7 @@ def encode_onefile(input_txt: str, output_bin: str, min_len: int = 3, max_len: i
     tok_codes = codec['encode_codes_from_lengths'](tok_lengths_by_id)
     
     bw = BitWriter()
-    bw.write_bytes_aligned(MAGIC)
-    bw.write_bytes_aligned(bytes([VERSION, encoding]))
+    bw.write_bytes_aligned(bytes([encoding]))
     
     write_alphabet_section(bw, alphabet, char_freqs, encoding)
     write_dictionary_section(bw, dictionary, byte_to_id, tok_freqs, char_codes, char_bits, encoding)
@@ -954,18 +950,8 @@ def decompress_onefile(path_bin: str) -> list:
         data = f.read()
 
     pos = 0
-
-    if data[pos : pos+4] != MAGIC:
-        raise ValueError("MAGIC non valido")
-
-    pos += 4
-    ver = data[pos]
-    pos += 1
     encoding = data[pos]
     pos += 1
-
-    if ver != VERSION:
-        raise ValueError(f"Versione non supportata: {ver}")
 
     br = BitReader(data, pos)
     alphabet, char_decoder = read_alphabet_section(br, encoding)
@@ -978,7 +964,7 @@ def decompress_onefile(path_bin: str) -> list:
 # CLI
 # ---------------------------
 def main():
-    ap = argparse.ArgumentParser(description = "SDB1: DFS Branch&Bound + encoding variabile")
+    ap = argparse.ArgumentParser(description = "Exhaustive")
     
     ap.add_argument("mode", choices = ["compress", "decompress"])
     ap.add_argument("input")
@@ -986,8 +972,8 @@ def main():
     ap.add_argument("--min-len", type = int, default = 3)
     ap.add_argument("--max-len", type = int, default = 32)
     ap.add_argument("--max-dict", type = int, default = 1023)
-    ap.add_argument("--exh-max-depth", type = int, default = 0, help = "Profondità DFS (0 = greedy, -1 = illimitata, N = profondità N)")
-    ap.add_argument("--encoding", default = 'fixed', choices = ['fixed', 'huffman-freq', 'huffman-len', 'positional'], help = "Modalità codifica simboli (default: fixed)")
+    ap.add_argument("--exh-max-depth", type = int, default = 0, help = "DFS depth (0 = greedy, -1 = no depth, N = depth N)")
+    ap.add_argument("--encoding", default = 'fixed', choices = ['fixed', 'huffman-freq', 'huffman-len', 'positional'], help = "Symbols encoding modes (default: fixed)")
     
     args = ap.parse_args()
     

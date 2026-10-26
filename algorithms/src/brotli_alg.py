@@ -12,9 +12,6 @@ from ctypes import c_int, c_size_t, c_uint8, c_void_p, c_uint32, POINTER, byref
 from datetime import datetime
 from pathlib import Path
 
-MAGIC = b"BRT1"
-VERSION = 1
-
 BROTLI_PARAM_QUALITY = 1
 BROTLI_PARAM_LGWIN = 2
 BROTLI_OPERATION_FINISH = 2
@@ -174,8 +171,6 @@ def _candidate_names(base: str) -> list:
     system = platform.system()
 
     if system == "Windows":
-        # Nomi possibili a seconda di come sono state ottenute le DLL
-        # (MSYS2/MinGW usa il prefisso "lib", vcpkg no).
         return [f"{base}.dll", f"lib{base}.dll", f"{base}-1.dll", f"lib{base}-1.dll"]
     elif system == "Darwin":
         return [f"lib{base}.1.dylib", f"lib{base}.dylib"]
@@ -293,9 +288,6 @@ def compress_one(data: bytes, zdict: bytes, quality: int, lgwin: int) -> bytes:
             if not _LIB_ENC.BrotliEncoderAttachPreparedDictionary(state, prepared):
                 raise RuntimeError("BrotliEncoderAttachPreparedDictionary fallita")
 
-        # ctypes gestisce correttamente array di lunghezza 0 -- niente bisogno
-        # di un max(1, ...): forzare una capacita' di 1 byte mentre si copiano
-        # 0 byte fa fallire from_buffer_copy su stringhe vuote.
         in_buf = (c_uint8 * len(data)).from_buffer_copy(data)
         avail_in = c_size_t(len(data))
         next_in = ctypes.cast(in_buf, POINTER(c_uint8))
@@ -312,9 +304,6 @@ def compress_one(data: bytes, zdict: bytes, quality: int, lgwin: int) -> bytes:
         if not ok:
             raise RuntimeError("BrotliEncoderCompressStream fallita")
 
-        # Senza questo controllo, un buffer di output troppo piccolo farebbe
-        # tornare un output silenziosamente troncato (CompressStream puo'
-        # restituire successo anche se lo stream non e' ancora completo).
         if not _LIB_ENC.BrotliEncoderIsFinished(state):
             raise RuntimeError("BrotliEncoderCompressStream non ha completato lo stream (buffer di output insufficiente?)")
 
@@ -355,9 +344,9 @@ def decompress_one(data: bytes, zdict: bytes) -> bytes:
             produced = chunk_cap - avail_out.value
             out += bytes(out_buf[:produced])
 
-            if res == 1:  # BROTLI_DECODER_RESULT_SUCCESS
+            if res == 1:
                 break
-            elif res == 3:  # BROTLI_DECODER_RESULT_NEEDS_MORE_OUTPUT
+            elif res == 3:
                 continue
             else:
                 raise RuntimeError(f"BrotliDecoderDecompressStream errore (result={res})")
@@ -367,7 +356,7 @@ def decompress_one(data: bytes, zdict: bytes) -> bytes:
         _LIB_DEC.BrotliDecoderDestroyInstance(state)
 
 # ---------------------------
-# I/O stringhe (stessa logica degli altri script)
+# I/O strings
 # ---------------------------
 def read_strings_text(path: str) -> list:
     out = []
@@ -393,7 +382,7 @@ def to_utf8_bytes(strings: list) -> list:
     return [s.encode("utf-8") for s in strings]
 
 # ---------------------------
-# Dizionario condiviso (corpus concatenato, come raw dictionary)
+# Dictionary
 # ---------------------------
 def build_shared_dict(byte_strings: list) -> bytes:
     return b"".join(byte_strings)
@@ -409,11 +398,7 @@ def encode_onefile(input_txt: str, output_bin: str, quality: int = 11, lgwin: in
 
     zdict = build_shared_dict(byte_strings)
 
-    # I campi di lunghezza usano la codifica esponenziale (stessa dei metodi proposti);
-    # i blocchi di byte grezzi (dizionario, stream brotli) restano allineati al byte
     bw = BitWriter()
-    bw.write_bytes_aligned(MAGIC)
-    bw.write_bytes_aligned(bytes([VERSION]))
     exp_write(bw, len(zdict))
     bw.write_bytes_aligned(zdict)
     exp_write(bw, len(byte_strings))
@@ -452,19 +437,7 @@ def decompress_onefile(path_bin: str) -> list:
     with open(full_path, "rb") as f:
         data = f.read()
 
-    pos = 0
-
-    if data[pos : pos + 4] != MAGIC:
-        raise ValueError("MAGIC non valido")
-
-    pos += 4
-    ver = data[pos]
-    pos += 1
-
-    if ver != VERSION:
-        raise ValueError(f"Versione non supportata: {ver}")
-
-    br = BitReader(data, pos)
+    br = BitReader(data, 0)
 
     dict_len = exp_read(br)
     zdict = br.read_bytes_aligned(dict_len)

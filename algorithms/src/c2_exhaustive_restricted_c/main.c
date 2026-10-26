@@ -26,9 +26,6 @@
 /* ============================================================
  * Constants
  * ============================================================ */
-static const uint8_t MAGIC[4] = { 'S', 'D', 'B', '1' };
-#define VERSION 1
-
 #define RAW 0
 #define TOK 1
 
@@ -2510,9 +2507,8 @@ static void encode_onefile(const char *project_root, const char *input_txt, cons
 
     BitWriter bw;
     bw_init(&bw);
-    bw_write_bytes_aligned(&bw, MAGIC, 4);
-    const uint8_t verenc[2] = { (uint8_t)VERSION, (uint8_t)encoding };
-    bw_write_bytes_aligned(&bw, verenc, 2);
+    const uint8_t enc = (uint8_t)encoding;
+    bw_write_bytes_aligned(&bw, &enc, 1);
 
     write_alphabet_section(&bw, &alph, encoding);
     write_dictionary_section(&bw, &dictionary, alph.byte_to_id, tok_freqs, char_codes, alph.char_bits, encoding);
@@ -2592,20 +2588,13 @@ static StrItem *decompress_onefile(const char *project_root, const char *path_bi
 
     fclose(f);
 
+    if(fsize < 1) {
+        fprintf(stderr, "Error: empty file\n");
+        exit(1);
+    }
+
     size_t pos = 0;
-    if(fsize < 4 || memcmp(data, MAGIC, 4) != 0) {
-        fprintf(stderr, "Error: invalid MAGIC\n");
-        exit(1);
-    }
-
-    pos += 4;
-    const int ver = data[pos]; pos += 1;
     const int encoding = data[pos]; pos += 1;
-
-    if(ver != VERSION) {
-        fprintf(stderr, "Error: unsupported version: %d\n", ver);
-        exit(1);
-    }
 
     BitReader br;
     br_init(&br, data, (size_t)fsize, pos);

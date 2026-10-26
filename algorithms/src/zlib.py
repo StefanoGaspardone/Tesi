@@ -10,9 +10,6 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
-MAGIC = b"ZLB1"
-VERSION = 1
-
 ZLIB_MAX_ZDICT = 32768
 
 # ---------------------------
@@ -217,8 +214,6 @@ def encode_onefile(input_txt: str, output_bin: str, level: int = 9, max_dict_byt
     zdict = build_shared_dict(byte_strings, max_dict_bytes)
 
     bw = BitWriter()
-    bw.write_bytes_aligned(MAGIC)
-    bw.write_bytes_aligned(bytes([VERSION]))
     exp_write(bw, len(zdict))
     bw.write_bytes_aligned(zdict)
     exp_write(bw, len(byte_strings))
@@ -258,19 +253,7 @@ def decompress_onefile(path_bin: str) -> list:
     with open(full_path, "rb") as f:
         data = f.read()
 
-    pos = 0
-
-    if data[pos : pos + 4] != MAGIC:
-        raise ValueError("MAGIC non valido")
-
-    pos += 4
-    ver = data[pos]
-    pos += 1
-
-    if ver != VERSION:
-        raise ValueError(f"Versione non supportata: {ver}")
-
-    br = BitReader(data, pos)
+    br = BitReader(data, 0)
 
     dict_len = exp_read(br)
     zdict = br.read_bytes_aligned(dict_len)
