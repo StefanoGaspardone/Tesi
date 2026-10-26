@@ -8,6 +8,7 @@ import heapq
 import time
 import os
 import logging
+import hashlib
 from datetime import datetime
 from collections import defaultdict
 from pathlib import Path
@@ -65,11 +66,14 @@ def exp_size(x: int, n0: int = EXP_N0) -> int:
     n = n0
     total_bits = 0
     first_ext = True
+    
     while True:
         threshold = (1 << n) - 1
         total_bits += n
+        
         if x < threshold:
             return total_bits
+        
         x -= threshold
         if first_ext:
             first_ext = False
@@ -79,13 +83,17 @@ def exp_size(x: int, n0: int = EXP_N0) -> int:
 def exp_write(bw, x: int, n0: int = EXP_N0):
     n = n0
     first_ext = True
+    
     while True:
         threshold = (1 << n) - 1
+        
         if x < threshold:
             bw.write_bits(x, n)
             return
+        
         bw.write_bits(threshold, n)
         x -= threshold
+        
         if first_ext:
             first_ext = False
         else:
@@ -95,11 +103,14 @@ def exp_read(br, n0: int = EXP_N0) -> int:
     n = n0
     total = 0
     first_ext = True
+    
     while True:
         v = br.read_bits(n)
         threshold = (1 << n) - 1
+        
         if v < threshold:
             return total + v
+        
         total += threshold
         if first_ext:
             first_ext = False
@@ -783,88 +794,178 @@ def greedy_build(byte_strings: list, char_bit_lengths: dict, encoding: int, min_
 # ---------------------------
 # DFS Branch & Bound
 # ---------------------------
-def build_dictionary(byte_strings: list, char_bit_lengths: dict, encoding: int, min_len: int = 3, max_len: int = 32, max_dict: int = 1023, max_depth: int | None = None) -> tuple:
+MEMO_MAX_ENTRIES = 5000000
+
+def lower_bound_bits(dct: list, sqs: list, candidates: dict, char_bit_lengths: dict, encoding: int, max_len: int) -> float:
+    D = len(dct)
+    codec = CODECS[encoding]
+
+    lb = exp_size(D)
+    for entry in dct:
+        lb += exp_size(len(entry)) + sum(char_bit_lengths[b] for b in entry)
+
+    if encoding == ENC_HUFF_LEN:
+        lb += max(0, codec['overhead_bits'](D) - 4)
+        tok_table_bits = 4
+    elif encoding == ENC_HUFF_FREQ:
+        lb += codec['overhead_bits'](D)
+        tok_table_bits = 8
+    else:
+        tok_table_bits = 0
+
+    lb += exp_size(len(sqs)) + 4 * len(sqs)
+    tok_freqs = count_tok_freqs(sqs)
+    n_tok = sum(tok_freqs.values())
+
+    if n_tok > 0:
+        if encoding == ENC_FIXED:
+            lb += n_tok * (1 + needed_bits(D))
+        elif encoding == ENC_POSITIONAL:
+            tok_bits = codec['token_lengths'](tok_freqs, D)
+            lb += sum(f * (1 + tok_bits[i]) for i, f in tok_freqs.items())
+        elif encoding == ENC_HUFF_LEN:
+            lengths = huffman_lengths(dict(tok_freqs))
+            lb += n_tok + sum(f * lengths[i] for i, f in tok_freqs.items())
+        else:
+            lb += 2 * n_tok
+
+    t_new = needed_bits(D + 1) if encoding == ENC_FIXED else 1
+
+    per_char = {}
+    for pat, occ in candidates.items():
+        if occ < 2:
+            continue
+
+        L = len(pat)
+        pat_bits = sum(char_bit_lengths[b] for b in pat)
+        per_char[pat] = ((1 + t_new) * occ + exp_size(L) + pat_bits + tok_table_bits) / (occ * L)
+
+    for seq in sqs:
+        n = len(seq)
+        row = [1 + char_bit_lengths[val] if typ == RAW else None for typ, val in seq]
+
+        for i in range(n):
+            if seq[i][0] != RAW:
+                continue
+
+            acc = bytearray()
+            for j in range(i, min(n, i + max_len)):
+                if seq[j][0] != RAW:
+                    break
+
+                acc.append(seq[j][1])
+                cost = per_char.get(bytes(acc))
+
+                if cost is not None:
+                    for k in range(i, j + 1):
+                        if cost < row[k]:
+                            row[k] = cost
+
+        lb += sum(x for x in row if x is not None)
+
+    return lb
+
+def state_key(dct: list, sqs: list) -> bytes:
+    h = hashlib.blake2b(digest_size = 16)
+
+    for seq in sqs:
+        h.update(b"\xff\xfe")
+
+        for typ, val in seq:
+            if typ == RAW:
+                h.update(bytes((0, val)))
+            else:
+                frag = dct[val]
+                h.update(bytes((1, len(frag))) + frag)
+
+    return h.digest()
+
+def build_dictionary(byte_strings: list, char_bit_lengths: dict, encoding: int, min_len: int = 3, max_len: int = 32, max_dict: int = 1023, max_depth: int | None = None, memo_max_entries: int = MEMO_MAX_ENTRIES) -> tuple:
     if max_depth == 0:
         return greedy_build(byte_strings, char_bit_lengths, encoding, min_len, max_len, max_dict)
-    
+
     init_seqs = initial_sequences(byte_strings)
     codec = CODECS[encoding]
-    
-    stats = {'nodes': 0, 'pruned_bb': 0}
-    
-    def compute_ub_gain(candidates: dict, sqs: list) -> float:
-        total = 0.0
-        
-        for pat in candidates:
-            occ = total_non_overlapping(sqs, pat)
-            gain = scoring_function(pat, occ, char_bit_lengths, 1)
-            
-            if gain > 0:
-                total += gain
-        
-        return total
-    
-    def dfs(dct: list, sqs: list, current_bits: int, depth: int) -> tuple:
+
+    stats = {'nodes': 0, 'pruned_bb': 0, 'pruned_memo': 0}
+    global_best_bits = [math.inf]
+    visited = {}
+    pruned = (math.inf, None, None)
+
+    def dfs(dct: list, sqs: list, depth: int) -> tuple:
         stats['nodes'] += 1
-        
+
+        remaining = math.inf if max_depth is None else max_depth - depth
+        key = state_key(dct, sqs)
+        seen = visited.get(key)
+
+        if seen is not None and seen >= remaining:
+            stats['pruned_memo'] += 1
+            return pruned
+
+        if seen is not None or len(visited) < memo_max_entries:
+            visited[key] = remaining
+
+        candidates = find_candidates(sqs, min_len, max_len) if len(dct) < max_dict else {}
+
+        if global_best_bits[0] < math.inf:
+            lb = lower_bound_bits(dct, sqs, candidates, char_bit_lengths, encoding, max_len)
+
+            if lb >= global_best_bits[0]:
+                stats['pruned_bb'] += 1
+                return pruned
+
         base_dct, base_sqs = greedy_build(byte_strings, char_bit_lengths, encoding, min_len, max_len, max_dict, list(dct), list(sqs))
         base_bits = score_dictionary_bits(base_dct, base_sqs, char_bit_lengths, encoding)
         best_local = (base_bits, list(base_dct), base_sqs)
-        
+
+        if base_bits < global_best_bits[0]:
+            global_best_bits[0] = base_bits
+
         if len(dct) >= max_dict:
             return best_local
-        
+
         if max_depth is not None and depth >= max_depth:
             return best_local
-        
-        candidates = find_candidates(sqs, min_len, max_len)
-        
+
         if not candidates:
             return best_local
-        
-        ub_gain_bits = compute_ub_gain(candidates, sqs)
-        
-        if current_bits - ub_gain_bits - ALIGN_SLACK_BITS >= base_bits:
-            stats['pruned_bb'] += 1
-            return best_local
-        
+
         D = len(dct)
         tok_freqs = count_tok_freqs(sqs)
         scored = []
-        
+
         for pat in candidates:
             occ = total_non_overlapping(sqs, pat)
             if occ < 2:
                 continue
-            
+
             token_bits_after = token_bits_for_candidate(codec, tok_freqs, D, occ)
             gain = scoring_function(pat, occ, char_bit_lengths, token_bits_after)
-            
+
             if gain > 0:
                 scored.append((gain, pat))
-        
+
         if not scored:
             return best_local
-        
+
         scored.sort(key = lambda x: x[0], reverse = True)
-        
+
         for _, pat in scored:
             new_dct = list(dct) + [pat]
             new_sqs = replace_non_overlapping(sqs, pat, D)
-            new_bits = score_dictionary_bits(new_dct, new_sqs, char_bit_lengths, encoding)
-            
-            cand_bits, cand_dct, cand_sqs = dfs(new_dct, new_sqs, new_bits, depth + 1)
-            
+
+            cand_bits, cand_dct, cand_sqs = dfs(new_dct, new_sqs, depth + 1)
+
             if cand_bits < best_local[0]:
                 best_local = (cand_bits, cand_dct, cand_sqs)
-        
+
         return best_local
-    
-    init_bits = score_dictionary_bits([], init_seqs, char_bit_lengths, encoding)
-    _best_bits, best_dict, best_seqs = dfs([], init_seqs, init_bits, 0)
-    
-    logging.info(f"DFS: nodes = {stats['nodes']}, pruned = {stats['pruned_bb']}")
-    
+
+    _best_bits, best_dict, best_seqs = dfs([], init_seqs, 0)
+
+    logging.info(f"DFS: nodes = {stats['nodes']}, pruned_bb = {stats['pruned_bb']}, pruned_memo = {stats['pruned_memo']}, memo_entries = {len(visited)}")
+
     return best_dict, best_seqs
 
 def _reorder_dict_for_positional(dictionary: list, seqs: list) -> tuple:
