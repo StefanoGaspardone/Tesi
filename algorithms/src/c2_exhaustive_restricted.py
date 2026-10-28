@@ -738,11 +738,12 @@ def replace_non_overlapping(seqs: list, pat_bytes: bytes, token_id: int) -> list
     return out_all
 
 def greedy_build(byte_strings: list, char_bit_lengths: dict, encoding: int, min_len: int = 3, max_len: int = 32, max_dict: int = 1023, init_dict: list | None = None, init_seqs: list | None = None) -> tuple:
-    seqs = init_seqs[:] if init_seqs is not None  else initial_sequences(byte_strings)
-    dictionary = list(init_dict) if init_dict is not None  else []
+    seqs = init_seqs[:] if init_seqs is not None else initial_sequences(byte_strings)
+    dictionary = list(init_dict) if init_dict is not None else []
     codec = CODECS[encoding]
     
     current_bits = score_dictionary_bits(dictionary, seqs, char_bit_lengths, encoding)
+    best_bits, best_dictionary, best_seqs = current_bits, dictionary, seqs
     
     while len(dictionary) < max_dict:
         D = len(dictionary)
@@ -768,18 +769,14 @@ def greedy_build(byte_strings: list, char_bit_lengths: dict, encoding: int, min_
         if best is None or best_gain <= 0:
             break
         
-        trial_dict = dictionary + [best]
-        trial_seqs = replace_non_overlapping(seqs, best, D)
-        trial_bits = score_dictionary_bits(trial_dict, trial_seqs, char_bit_lengths, encoding)
+        dictionary = dictionary + [best]
+        seqs = replace_non_overlapping(seqs, best, D)
+        current_bits = score_dictionary_bits(dictionary, seqs, char_bit_lengths, encoding)
         
-        if trial_bits >= current_bits:
-            break
-        
-        dictionary = trial_dict
-        seqs = trial_seqs
-        current_bits = trial_bits
+        if current_bits < best_bits:
+            best_bits, best_dictionary, best_seqs = current_bits, dictionary, seqs
     
-    return dictionary, seqs
+    return best_dictionary, best_seqs
 
 def build_dictionary_restricted(byte_strings: list, char_bit_lengths: dict, encoding: int, min_len: int = 3, max_len: int = 32, max_dict: int = 1023, lookahead_depth: int = 0, lookahead_topk: int = 1) -> tuple:
     if lookahead_depth <= 0 and lookahead_topk <= 1:
