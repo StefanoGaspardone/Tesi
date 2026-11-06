@@ -2054,8 +2054,6 @@ static void greedy_build(const StrItem *strs, const int nstrs, const int *char_b
 
     int64_t current_bits = score_dictionary_bits(&dictionary, &seqs, char_bit_len_by_byte, encoding);
 
-    /* The exact size is not monotone step by step (byte alignment, length field of D):
-     * keep extending while candidates have positive gain and return the best prefix found */
     int64_t best_bits = current_bits;
     int best_n = dictionary.n;
     SeqList best_seqs = seqlist_clone(&seqs);
@@ -2130,13 +2128,6 @@ static void greedy_build(const StrItem *strs, const int nstrs, const int *char_b
 #define MEMO_MAX_ENTRIES 5000000LL
 #define MEMO_INITIAL_CAP (1u << 16)
 
-/* ------------------------------------------------------------
- * Memoization: insieme degli stati gia' esplorati, come tabella hash a indirizzamento aperto.
- * Ogni voce contiene solo l'impronta a 128 bit dello stato (16 byte per voce); una voce con
- * h2 == 0 e' vuota (state_key non produce mai h2 == 0). La tabella cresce raddoppiando
- * finche' il numero di stati non raggiunge max_entries; oltre, gli stati nuovi non vengono
- * piu' memorizzati (la ricerca resta corretta, solo meno veloce).
- * ------------------------------------------------------------ */
 typedef struct {
     uint64_t h1, h2;
 } MemoEntry;
@@ -2190,12 +2181,10 @@ static void memo_grow(MemoTable *m) {
     *m = bigger;
 }
 
-/* 1 se lo stato e' gia' stato esplorato, 0 altrimenti */
 static int memo_contains(const MemoTable *m, const uint64_t h1, const uint64_t h2) {
     return m->entries[memo_slot(m, h1, h2)].h2 != 0;
 }
 
-/* Aggiunge uno stato nuovo, solo se c'e' ancora posto */
 static void memo_add(MemoTable *m, const uint64_t h1, const uint64_t h2) {
     if(m->n >= m->max_entries) return;
 
@@ -2208,12 +2197,6 @@ static void memo_add(MemoTable *m, const uint64_t h1, const uint64_t h2) {
     m->n++;
 }
 
-/* ------------------------------------------------------------
- * Impronta dello stato, indipendente dall'ordine con cui i frammenti sono stati scelti:
- * ogni token viene sostituito dal contenuto del frammento che rappresenta.
- * Due hash a 64 bit indipendenti (FNV-1a e una variante con mescolamento finale)
- * formano un'impronta a 128 bit.
- * ------------------------------------------------------------ */
 typedef struct { uint64_t a, b; } Hash128;
 
 static void hash128_update(Hash128 *h, const uint8_t *data, const size_t len) {
@@ -2260,19 +2243,9 @@ static void state_key(const Dictionary *dct, const SeqList *sqs, uint64_t *out_h
     }
 
     *out_h1 = mix64(h.a);
-    *out_h2 = mix64(h.b ^ h.a) | 1ULL; /* mai 0: 0 indica una voce vuota della tabella */
+    *out_h2 = mix64(h.b ^ h.a) | 1ULL;
 }
 
-/* ------------------------------------------------------------
- * Limite inferiore del costo (in bit) di qualsiasi configurazione raggiungibile da (dct, sqs).
- * Stessa logica della versione Python (lower_bound_bits):
- *   - sezione dizionario: voci esistenti esatte, exp_size(D) e tabella dei token (che possono solo
- *     crescere); la tabella cresce di 4 bit (huffman-len) o 8 bit (huffman-freq) per ogni token nuovo;
- *   - stream: numero di stringhe esatto, almeno 4 bit per la lunghezza di ogni stringa;
- *   - token gia' presenti: 1 bit di controllo + costo minimo dell'indice;
- *   - posizioni RAW: minimo tra restare carattere e il costo per carattere del candidato migliore
- *     che le copre, con il conteggio (con sovrapposizioni) di find_candidates come massimo di occorrenze.
- * ------------------------------------------------------------ */
 static int candmap_find(const CandMap *m, const uint8_t *key, const int keylen) {
     if(m->n == 0) return -1;
 
@@ -2294,7 +2267,6 @@ static int candmap_find(const CandMap *m, const uint8_t *key, const int keylen) 
 static double lower_bound_bits(const Dictionary *dct, const SeqList *sqs, const CandMap *candidates, const int *char_bit_len_by_byte, const int encoding, const int max_len) {
     const int D = dct->n;
 
-    /* Sezione dizionario */
     double lb = (double)exp_size((uint64_t)D);
 
     for(int i = 0; i < D; i++) {
@@ -2315,10 +2287,8 @@ static double lower_bound_bits(const Dictionary *dct, const SeqList *sqs, const 
         tok_table_bits = 8;
     }
 
-    /* Stream: numero di stringhe e lunghezze */
     lb += (double)(exp_size((uint64_t)sqs->n) + 4 * (int64_t)sqs->n);
 
-    /* Token gia' presenti nello stream */
     int64_t *tok_freqs = count_tok_freqs(sqs, D);
     int64_t n_tok = 0;
     for(int i = 0; i < D; i++) n_tok += tok_freqs[i];
@@ -2347,10 +2317,8 @@ static double lower_bound_bits(const Dictionary *dct, const SeqList *sqs, const 
 
     free(tok_freqs);
 
-    /* Costo minimo dell'indice di un token nuovo */
     const int t_new = encoding == ENC_FIXED ? needed_bits(D + 1) : 1;
 
-    /* Costo per carattere di ogni candidato */
     double *per_char = (double *)malloc(sizeof(double) * (candidates->n > 0 ? candidates->n : 1));
 
     for(int c = 0; c < candidates->n; c++) {
@@ -2370,7 +2338,6 @@ static double lower_bound_bits(const Dictionary *dct, const SeqList *sqs, const 
         per_char[c] = (double)num / (double)(occ * L);
     }
 
-    /* Posizioni RAW: stessa scansione di find_candidates */
     int rowcap = 64;
     double *row = (double *)malloc(sizeof(double) * rowcap);
     uint8_t *acc = (uint8_t *)malloc((size_t)(max_len > 0 ? max_len : 1));
@@ -2437,7 +2404,7 @@ typedef struct {
     int64_t global_best_bits;
     MemoTable memo;
 
-    int64_t nodes, pruned_bb, pruned_memo;
+    int64_t nodes, pruned;
 } DfsCtx;
 
 typedef struct { int64_t bits; Dictionary dict; SeqList seqs; } DfsResult;
@@ -2464,14 +2431,11 @@ static int scoreditem_cmp_desc(const void *a, const void *b) {
 static DfsResult dfs_run(DfsCtx *ctx, const Dictionary *dct, const SeqList *sqs, const int depth) {
     ctx->nodes++;
 
-    /* 1. Memoization: uno stato equivalente (stessi frammenti, scelti in un altro ordine) e' gia' stato
-     *    esplorato e ha gia' contribuito a global_best_bits, quindi non puo' dare una soluzione
-     *    strettamente migliore */
     uint64_t h1, h2;
     state_key(dct, sqs, &h1, &h2);
 
     if(memo_contains(&ctx->memo, h1, h2)) {
-        ctx->pruned_memo++;
+        ctx->pruned++;
         return dfs_pruned_result();
     }
 
@@ -2481,19 +2445,16 @@ static DfsResult dfs_run(DfsCtx *ctx, const Dictionary *dct, const SeqList *sqs,
     if(dct->n < ctx->max_dict) candidates = find_candidates(sqs, ctx->min_len, ctx->max_len);
     else candmap_init(&candidates, 64);
 
-    /* 2. Branch & Bound: se nemmeno nel caso migliore il sottoalbero (compreso il completamento greedy
-     *    del nodo) puo' scendere sotto global_best_bits, viene scartato senza essere calcolato */
     if(ctx->global_best_bits < INT64_MAX) {
         const double lb = lower_bound_bits(dct, sqs, &candidates, ctx->char_bit_len_by_byte, ctx->encoding, ctx->max_len);
 
         if(ceil(lb - 1e-9) >= (double)ctx->global_best_bits) {
-            ctx->pruned_bb++;
+            ctx->pruned++;
             candmap_free(&candidates);
             return dfs_pruned_result();
         }
     }
 
-    /* 3. Completamento greedy: soluzione di riferimento del nodo */
     Dictionary base_dct; SeqList base_sqs;
     greedy_build(ctx->strs, ctx->nstrs, ctx->char_bit_len_by_byte, ctx->encoding, ctx->min_len, ctx->max_len, ctx->max_dict, dct, sqs, &base_dct, &base_sqs);
     const int64_t base_bits = score_dictionary_bits(&base_dct, &base_sqs, ctx->char_bit_len_by_byte, ctx->encoding);
@@ -2505,13 +2466,11 @@ static DfsResult dfs_run(DfsCtx *ctx, const Dictionary *dct, const SeqList *sqs,
 
     if(base_bits < ctx->global_best_bits) ctx->global_best_bits = base_bits;
 
-    /* 4. Condizioni di terminazione */
     if(dct->n >= ctx->max_dict || (!ctx->max_depth_is_none && depth >= ctx->max_depth) || candidates.n == 0) {
         candmap_free(&candidates);
         return best_local;
     }
 
-    /* 5. Figli: candidati con guadagno positivo, in ordine di guadagno decrescente */
     const int D = dct->n;
     int64_t *tok_freqs = count_tok_freqs(sqs, D);
 
@@ -2588,7 +2547,7 @@ static void exhaustive_build(const StrItem *strs, const int nstrs, const int *ch
     ctx.max_depth = max_depth; ctx.max_depth_is_none = max_depth_is_none;
     ctx.global_best_bits = INT64_MAX;
     memo_init(&ctx.memo, MEMO_MAX_ENTRIES);
-    ctx.nodes = ctx.pruned_bb = ctx.pruned_memo = 0;
+    ctx.nodes = ctx.pruned = 0;
 
     Dictionary empty_dict; dict_init(&empty_dict, 4);
 
@@ -2597,7 +2556,7 @@ static void exhaustive_build(const StrItem *strs, const int nstrs, const int *ch
     dict_free(&empty_dict);
     seqlist_free(&init_seqs);
 
-    log_line("DFS: nodes = %lld, pruned_bb = %lld, pruned_memo = %lld, memo_entries = %lld", (long long)ctx.nodes, (long long)ctx.pruned_bb, (long long)ctx.pruned_memo, (long long)ctx.memo.n);
+    log_line("DFS: nodes = %lld, pruned = %lld, memo_entries = %lld", (long long)ctx.nodes, (long long)ctx.pruned, (long long)ctx.memo.n);
 
     memo_free(&ctx.memo);
 

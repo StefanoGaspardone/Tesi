@@ -1,0 +1,34 @@
+{
+	"version": 6,
+	"configurePresets": [
+		{
+			"name": "release",
+			"generator": "Ninja",
+			"binaryDir": "${sourceDir}/build",
+			"cacheVariables": {
+				"CMAKE_BUILD_TYPE": "Release"
+			}
+		}
+	],
+	"buildPresets": [
+		{
+			"name": "release",
+			"configurePreset": "release"
+		}
+	],
+	"workflowPresets": [
+		{
+			"name": "release",
+			"steps": [
+				{
+					"type": "configure",
+					"name": "release"
+				},
+				{
+					"type": "build",
+					"name": "release"
+				}
+			]
+		}
+	]
+}

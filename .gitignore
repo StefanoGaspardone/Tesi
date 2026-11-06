@@ -18,24 +18,10 @@ ENV/
 .tox/
 .nox/
 
-# Coverage and build artifacts
-.coverage
-.coverage.*
-htmlcov/
-build/
-dist/
-site/
-*.egg-info/
-.eggs/
-pip-wheel-metadata/
-
-# Notebooks
-.ipynb_checkpoints/
-
-
 # C
 cmake-build-*/
 **/cmake-build-*/
+build/
 
 # CMake generated files
 CMakeCache.txt
@@ -94,23 +80,4 @@ outputs/
 algorithms/outputs/
 *.bin
 logs/
-
-# LaTeX (per la cartella thesis)
-*.aux
-*.bbl
-*.blg
-*.brf
-*.bcf
-*.idx
-*.ilg
-*.ind
-*.lof
-*.lot
-*.nav
-*.out
-*.snm
-*.toc
-*.run.xml
-*.synctex.gz
-*.fls
-*.fdb_latexmk
+partitions.py

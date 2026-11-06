@@ -628,7 +628,6 @@ def count_tok_freqs(seqs: list) -> dict:
     return tok_freqs
 
 ALIGNED_OVERHEAD = {ENC_HUFF_FREQ, ENC_HUFF_LEN}
-ALIGN_SLACK_BITS = 7
 
 def ceil_to_byte(bits: int) -> int:
     return (bits + 7) // 8 * 8
@@ -796,7 +795,7 @@ def greedy_build(byte_strings: list, char_bit_lengths: dict, encoding: int, min_
 # ---------------------------
 MEMO_MAX_ENTRIES = 5000000
 
-def lower_bound_bits(dct: list, sqs: list, candidates: dict, char_bit_lengths: dict, encoding: int, max_len: int) -> float:
+def lower_bound_bits(dct: list, sqs: list, candidates: dict, char_bit_lengths: dict, encoding: int, max_len: int) -> int:
     D = len(dct)
     codec = CODECS[encoding]
 
@@ -863,7 +862,7 @@ def lower_bound_bits(dct: list, sqs: list, candidates: dict, char_bit_lengths: d
 
         lb += sum(x for x in row if x is not None)
 
-    return lb
+    return math.ceil(lb)
 
 def state_key(dct: list, sqs: list) -> bytes:
     h = hashlib.blake2b(digest_size = 16)
@@ -880,14 +879,14 @@ def state_key(dct: list, sqs: list) -> bytes:
 
     return h.digest()
 
-def build_dictionary(byte_strings: list, char_bit_lengths: dict, encoding: int, min_len: int = 3, max_len: int = 32, max_dict: int = 1023, max_depth: int | None = None, memo_max_entries: int = MEMO_MAX_ENTRIES) -> tuple:
+def build_dictionary(byte_strings: list, char_bit_lengths: dict, encoding: int, min_len: int = 3, max_len: int = 32, max_dict: int = 1023, max_depth: int | None = None) -> tuple:
     if max_depth == 0:
         return greedy_build(byte_strings, char_bit_lengths, encoding, min_len, max_len, max_dict)
 
     init_seqs = initial_sequences(byte_strings)
     codec = CODECS[encoding]
 
-    stats = {'nodes': 0, 'pruned_bb': 0, 'pruned_memo': 0}
+    stats = {'nodes': 0, 'pruned': 0}
     global_best_bits = [math.inf]
     visited = set()
     pruned = (math.inf, None, None)
@@ -898,10 +897,10 @@ def build_dictionary(byte_strings: list, char_bit_lengths: dict, encoding: int, 
         key = state_key(dct, sqs)
 
         if key in visited:
-            stats['pruned_memo'] += 1
+            stats['pruned'] += 1
             return pruned
 
-        if len(visited) < memo_max_entries:
+        if len(visited) < MEMO_MAX_ENTRIES:
             visited.add(key)
 
         candidates = find_candidates(sqs, min_len, max_len) if len(dct) < max_dict else {}
@@ -910,7 +909,7 @@ def build_dictionary(byte_strings: list, char_bit_lengths: dict, encoding: int, 
             lb = lower_bound_bits(dct, sqs, candidates, char_bit_lengths, encoding, max_len)
 
             if lb >= global_best_bits[0]:
-                stats['pruned_bb'] += 1
+                stats['pruned'] += 1
                 return pruned
 
         base_dct, base_sqs = greedy_build(byte_strings, char_bit_lengths, encoding, min_len, max_len, max_dict, list(dct), list(sqs))
@@ -962,7 +961,7 @@ def build_dictionary(byte_strings: list, char_bit_lengths: dict, encoding: int, 
 
     _best_bits, best_dict, best_seqs = dfs([], init_seqs, 0)
 
-    logging.info(f"DFS: nodes = {stats['nodes']}, pruned_bb = {stats['pruned_bb']}, pruned_memo = {stats['pruned_memo']}, memo_entries = {len(visited)}")
+    logging.info(f"DFS: nodes = {stats['nodes']}, pruned = {stats['pruned']}, memo_entries = {len(visited)}")
 
     return best_dict, best_seqs
 
