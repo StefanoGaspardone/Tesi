@@ -1,6 +1,3 @@
-// cmake .. -DCMAKE_BUILD_TYPE=Release
-// cmake --build . -j $(nproc)
-
 #define _GNU_SOURCE
 
 #include <stdio.h>
@@ -2645,6 +2642,11 @@ static int detect_nthreads(void) {
 }
 
 int main(const int argc, char **argv) {
+    #ifdef _WIN32
+        SetConsoleOutputCP(CP_UTF8);
+        SetConsoleCP(CP_UTF8);
+    #endif
+
     const char *mode = NULL;
     const char *input = NULL;
     const char *output = NULL;
