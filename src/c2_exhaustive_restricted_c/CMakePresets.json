@@ -7,12 +7,21 @@
 			"cacheVariables": {
 				"CMAKE_BUILD_TYPE": "Release"
 			}
+		},
+		{
+			"name": "release-windows",
+			"inherits": "release",
+			"generator": "Ninja"
 		}
 	],
 	"buildPresets": [
 		{
 			"name": "release",
 			"configurePreset": "release"
+		},
+		{
+			"name": "release-windows",
+			"configurePreset": "release-windows"
 		}
 	],
 	"workflowPresets": [
@@ -26,6 +35,19 @@
 				{
 					"type": "build",
 					"name": "release"
+				}
+			]
+		},
+		{
+			"name": "release-windows",
+			"steps": [
+				{
+					"type": "configure",
+					"name": "release-windows"
+				},
+				{
+					"type": "build",
+					"name": "release-windows"
 				}
 			]
 		}

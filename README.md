@@ -178,7 +178,7 @@ Before running the C executables, navigate to their respective subdirectories in
 
 ```bash
 cd src/<c_project_folder>
-cmake --workflow --preset release
+cmake --workflow --preset release (release-windows on Windows)
 ```
 
 *Replace `<c_project_folder>` with either `c2_exhaustive_c` or `c2_exhaustive_restricted_c`.*
