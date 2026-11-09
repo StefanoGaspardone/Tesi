@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# exhaustive
+# exhaustive combinations
 
 import argparse
 import ast
