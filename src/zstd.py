@@ -247,7 +247,7 @@ def auto_tune_dict_size(byte_strings: list, level: int) -> tuple:
             results[c] = r
 
     if not results:
-        raise RuntimeError("Nessuna dimensione di dizionario valida trovata nello sweep iniziale")
+        raise RuntimeError("No valid dictionary size found in the initial sweep")
 
     best_size = min(results, key = lambda k: results[k][3])
 
@@ -356,14 +356,14 @@ def decompress_onefile(path_bin: str) -> list:
 # CLI
 # ---------------------------
 def main():
-    ap = argparse.ArgumentParser(description = "Baseline zstandard con dizionario condiviso")
+    ap = argparse.ArgumentParser(description = "Zstandard baseline with a shared dictionary")
 
     ap.add_argument("mode", choices = ["compress", "decompress"])
     ap.add_argument("input")
     ap.add_argument("output", nargs = "?")
-    ap.add_argument("--level", type = int, default = 22, help = "Livello compressione zstd (1-22, default 22 = ultra)")
-    ap.add_argument("--dict-mode", default = "raw", choices = ["raw", "trained"], help = "raw = corpus concatenato come dizionario; trained = dizionario ottimizzato COVER (richiede corpus abbastanza grande/vario)")
-    ap.add_argument("--dict-size", type = int, default = None, help = "Dimensione target del dizionario trained (bytes). Se omesso con --dict-mode trained, viene cercata automaticamente la dimensione migliore.")
+    ap.add_argument("--level", type = int, default = 22, help = "Zstd compression level (1-22, default 22 = ultra)")
+    ap.add_argument("--dict-mode", default = "raw", choices = ["raw", "trained"], help = "raw = concatenated corpus used as dictionary; trained = COVER-optimized dictionary (requires a large/varied enough corpus)")
+    ap.add_argument("--dict-size", type = int, default = None, help = "Target size of the trained dictionary (bytes). If omitted with --dict-mode trained, the best size is searched automatically.")
 
     args = ap.parse_args()
 

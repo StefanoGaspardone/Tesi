@@ -14,9 +14,6 @@ from datetime import datetime
 from collections import defaultdict
 from pathlib import Path
 
-MAGIC = b"SDB1"
-VERSION = 1
-
 RAW = 0
 TOK = 1
 
@@ -60,39 +57,66 @@ def setup_logger(input_filename):
         ],
     )
 
-# ---------------------------
-# Varint (LEB128 unsigned)
-# ---------------------------
-def uvarint_encode(x: int) -> bytes:
-    out = bytearray()
+# ---------------------
+# Exponential encoding
+# ---------------------
+
+EXP_N0 = 4
+
+def exp_size(x: int, n0: int = EXP_N0) -> int:
+    n = n0
+    total_bits = 0
+    first_ext = True
     
     while True:
-        b = x & 0x7F
-        x >>= 7
+        threshold = (1 << n) - 1
+        total_bits += n
         
-        out.append(b | 0x80 if x else b)
+        if x < threshold:
+            return total_bits
         
-        if not x:
-            break
-    
-    return bytes(out)
+        x -= threshold
+        if first_ext:
+            first_ext = False
+        else:
+            n *= 2
 
-def uvarint_decode(data: bytes, pos: int):
-    x = 0
-    shift = 0
+def exp_write(bw, x: int, n0: int = EXP_N0):
+    n = n0
+    first_ext = True
     
     while True:
-        b = data[pos]
-        pos += 1
-        x |= (b & 0x7F) << shift
+        threshold = (1 << n) - 1
         
-        if not (b & 0x80):
-            return x, pos
+        if x < threshold:
+            bw.write_bits(x, n)
+            return
         
-        shift += 7
+        bw.write_bits(threshold, n)
+        x -= threshold
+        
+        if first_ext:
+            first_ext = False
+        else:
+            n *= 2
 
-def varint_size(x: int) -> int:
-    return len(uvarint_encode(x))
+def exp_read(br, n0: int = EXP_N0) -> int:
+    n = n0
+    total = 0
+    first_ext = True
+    
+    while True:
+        v = br.read_bits(n)
+        threshold = (1 << n) - 1
+        
+        if v < threshold:
+            return total + v
+        
+        total += threshold
+        if first_ext:
+            first_ext = False
+        else:
+            n *= 2
 
 def needed_bits(n: int) -> int:
     return 1 if n <= 1 else math.ceil(math.log2(n))
@@ -166,6 +190,8 @@ class BitReader:
 # ---------------------------
 # Huffman
 # ---------------------------
+
+# huffman code length of every symbol (only lengths: actual codes are built canonically from them).
 def huffman_lengths(freq_map: dict) -> dict:
     if not freq_map:
         return {}
@@ -173,6 +199,7 @@ def huffman_lengths(freq_map: dict) -> dict:
     if len(freq_map) == 1:
         return {next(iter(freq_map)): 1}
     
+    # [freq, tie, symbols]: 'tie' makes the merge order deterministic, so encoder and decoder agree
     heap = [[f, i, [s]] for i, (s, f) in enumerate(sorted(freq_map.items()))]
     lengths = dict.fromkeys(freq_map, 0)
     tie = len(heap)
@@ -182,6 +209,7 @@ def huffman_lengths(freq_map: dict) -> dict:
         f1, _, s1 = heapq.heappop(heap)
         f2, _, s2 = heapq.heappop(heap)
         
+        # every symbol of the two merged nodes moves one level deeper
         for s in s1:
             lengths[s] += 1
         for s in s2:
@@ -192,6 +220,7 @@ def huffman_lengths(freq_map: dict) -> dict:
     
     return lengths
 
+# canonical Huffman codes {symbol: (code, length)}: fully determined by the lengths.
 def canonical_codes(lengths: dict) -> dict:
     syms = sorted(lengths.keys(), key = lambda s: (lengths[s], s))
     codes = {}
@@ -201,6 +230,7 @@ def canonical_codes(lengths: dict) -> dict:
     for s in syms:
         L = lengths[s]
         
+        # longer codes: shift left, so no shorter code is a prefix of a longer one
         if L > prev:
             code <<= (L - prev)
         
@@ -210,6 +240,7 @@ def canonical_codes(lengths: dict) -> dict:
     
     return codes
 
+# decoder side of canonical_codes: {(code, length): symbol} and the maximum code length.
 def canonical_lookup(lengths: dict) -> tuple:
     syms = sorted(lengths.keys(), key = lambda s: (lengths[s], s))
     lookup = {}
@@ -230,6 +261,7 @@ def canonical_lookup(lengths: dict) -> tuple:
     
     return lookup, max_len
 
+# scales frequencies to 1..255.
 def normalize_freqs(freq_map: dict, n: int) -> list:
     max_f = max(freq_map.values()) if freq_map else 1
     return [max(1, min(255, round(freq_map.get(i, 1) * 255 / max_f))) for i in range(n)]
@@ -267,6 +299,7 @@ def _uniform_lengths(count: int) -> dict:
     bits = needed_bits(count)
     return {i: bits for i in range(count)}
 
+# huffman lengths computed on the normalized frequencies: the decoder only sees those, so it rebuilds the same tree.
 def _huffman_freq_lengths(freqs: dict, count: int) -> dict:
     if count == 0:
         return {}
@@ -417,6 +450,9 @@ HUFFMAN_LEN_CODEC = {
     'overhead_bits': _huffman_len_overhead_bits,
 }
 
+# every encoding exposes the same interface, so the search and the writer never branch on the encoding.
+# search side: char_lengths, token_lengths. Writer side: encode_codes_from_lengths, write_symbol, write_overhead.
+# Decoder side: decoder_from_lengths, read_symbol, read_overhead.
 CODECS = {
     ENC_FIXED: FIXED_CODEC,
     ENC_HUFF_FREQ: HUFFMAN_FREQ_CODEC,
@@ -433,13 +469,16 @@ def write_sym(bw: BitWriter, sym_id: int, encoding: int, codes: dict, fixed_bits
 def read_sym(br: BitReader, encoding: int, decoder: dict) -> int:
     return CODECS[encoding]['read_symbol'](br, decoder)
 
+# bit length of every byte under the chosen encoding, keyed by byte value (used by all cost functions).
 def compute_char_bit_lengths(alphabet: bytes, char_freqs: dict, encoding: int) -> dict:
     lengths_by_id = CODECS[encoding]['char_lengths'](alphabet, char_freqs)
     return {alphabet[i]: lengths_by_id[i] for i in range(len(alphabet))}
 
 # ---------------------------
-# I/O stringhe
+# I/O strings
 # ---------------------------
+
+# reads one string per line
 def read_strings_text(path: str) -> list:
     out = []
     
@@ -463,6 +502,7 @@ def read_strings_text(path: str) -> list:
 def to_utf8_bytes(strings: list) -> list:
     return [s.encode("utf-8") for s in strings]
 
+# builds the alphabet (distinct bytes), the byte -> id map, the fixed code width and the byte frequencies.
 def build_alphabet(byte_strings: list, sort_by_freq: bool = False) -> tuple:
     freq = defaultdict(int)
     
@@ -470,6 +510,7 @@ def build_alphabet(byte_strings: list, sort_by_freq: bool = False) -> tuple:
         for bv in bs:
             freq[bv] += 1
     
+    # positional: ids follow decreasing frequency, so the id is the rank used by Elias gamma
     srt = (sorted(freq, key = lambda bv: freq[bv], reverse = True) if sort_by_freq else sorted(freq))
     alph = bytes(srt)
     inv = {alph[i]: i for i in range(len(alph))}
@@ -482,37 +523,34 @@ def build_alphabet(byte_strings: list, sort_by_freq: bool = False) -> tuple:
 def write_alphabet_section(bw: BitWriter, alphabet: bytes, char_freqs: dict, encoding: int):
     A = len(alphabet)
     
-    bw.write_bytes_aligned(uvarint_encode(A))
+    exp_write(bw, A)
     bw.write_bytes_aligned(alphabet)
     
     CODECS[encoding]['write_overhead'](bw, char_freqs, A)
 
-def read_alphabet_section(data: bytes, pos: int, encoding: int) -> tuple:
-    A, pos = uvarint_decode(data, pos)
-    alphabet = data[pos : pos + A]
-    pos += A
+def read_alphabet_section(br: BitReader, encoding: int) -> tuple:
+    A = exp_read(br)
+    alphabet = br.read_bytes_aligned(A)
     
     if A == 0:
         alphabet = b"\x00"
         A = 1
     
     codec = CODECS[encoding]
-    br_tmp = BitReader(data, pos)
-    lengths = codec['read_overhead'](br_tmp, A)
-    pos = br_tmp.pos
+    lengths = codec['read_overhead'](br, A)
     decoder = codec['decoder_from_lengths'](lengths, A)
     
-    return alphabet, decoder, pos
+    return alphabet, decoder
 
 # ---------------------------
 # Dictionary
 # ---------------------------
 def write_dictionary_section(bw: BitWriter, dictionary: list, byte_to_id: dict, tok_freqs: dict, char_codes: dict, char_bits: int, encoding: int):
     D = len(dictionary)
-    bw.write_bytes_aligned(uvarint_encode(D))
+    exp_write(bw, D)
     
     for entry in dictionary:
-        bw.write_bytes_aligned(uvarint_encode(len(entry)))
+        exp_write(bw, len(entry))
         
         for b in entry:
             write_sym(bw, byte_to_id[b], encoding, char_codes, char_bits)
@@ -523,8 +561,7 @@ def read_dictionary_section(br: BitReader, alphabet: bytes, char_decoder: dict, 
     dictionary = []
     
     for _ in range(num_entries):
-        br.align_to_byte()
-        L, br.pos = uvarint_decode(br.data, br.pos)
+        L = exp_read(br)
         
         entry = bytearray()
         for _ in range(L):
@@ -534,7 +571,6 @@ def read_dictionary_section(br: BitReader, alphabet: bytes, char_decoder: dict, 
         dictionary.append(bytes(entry))
     
     codec = CODECS[encoding]
-    br.align_to_byte()
     lengths = codec['read_overhead'](br, num_entries)
     tok_decoder = codec['decoder_from_lengths'](lengths, num_entries)
     
@@ -544,10 +580,10 @@ def read_dictionary_section(br: BitReader, alphabet: bytes, char_decoder: dict, 
 # Stream
 # ---------------------------
 def write_stream(bw: BitWriter, seqs: list, byte_to_id: dict, char_codes: dict, char_bits: int, tok_codes: dict, token_bits: int, encoding: int):
-    bw.write_bytes_aligned(uvarint_encode(len(seqs)))
+    exp_write(bw, len(seqs))
     
     for seq in seqs:
-        bw.write_bytes_aligned(uvarint_encode(len(seq)))
+        exp_write(bw, len(seq))
         
         for typ, val in seq:
             if typ == RAW:
@@ -558,14 +594,12 @@ def write_stream(bw: BitWriter, seqs: list, byte_to_id: dict, char_codes: dict, 
                 write_sym(bw, val, encoding, tok_codes, token_bits)
 
 def read_stream(br: BitReader, alphabet: bytes, dictionary: list, encoding: int, char_decoder: dict, tok_decoder: dict) -> list:
-    br.align_to_byte()
-    N, br.pos = uvarint_decode(br.data, br.pos)
+    N = exp_read(br)
     
     out_strings = []
     
     for _ in range(N):
-        br.align_to_byte()
-        S, br.pos = uvarint_decode(br.data, br.pos)
+        S = exp_read(br)
         
         out = bytearray()
         
@@ -584,8 +618,11 @@ def read_stream(br: BitReader, alphabet: bytes, dictionary: list, encoding: int,
     return out_strings
 
 # ---------------------------
-# Split stringhe (separatori)
+# String split (separators)
 # ---------------------------
+
+# a byte is a separator if all its predecessors are distinct and all its successors are distinct.
+# strings are split on separators (fewer partitions to enumerate); returns the pieces and the separator counts.
 def split_strings(strings: list[bytes]) -> tuple[list[bytes], dict[bytes, int]]:
     char_map = {}
     
@@ -628,8 +665,10 @@ def split_strings(strings: list[bytes]) -> tuple[list[bytes], dict[bytes, int]]:
     return new_strings, initial_dict
 
 # ---------------------------
-# Partizioni
+# Partitions
 # ---------------------------
+
+# all the 2^(n-1) ways to cut s into contiguous fragments: bit j of mask = cut after byte j.
 def get_partitions(s: bytes) -> list:
     n = len(s)
     partitions = []
@@ -651,6 +690,8 @@ def get_partitions(s: bytes) -> list:
 # ---------------------------
 # Scoring
 # ---------------------------
+
+# occurrences of every token id in the strings (input of the token code lengths).
 def count_tok_freqs(seqs: list) -> dict:
     tok_freqs = defaultdict(int)
     
@@ -661,19 +702,25 @@ def count_tok_freqs(seqs: list) -> dict:
     
     return tok_freqs
 
+# estimated gain in bits of turning the occ occurrences of a fragment into a token
+# (bytes and their control bits saved, minus the token codes and the dictionary entry).
 def scoring_function(pat_bytes: bytes, occ: int, char_bit_lengths: dict, token_bits_after: int) -> float:
     L = len(pat_bytes)
     pat_bits = sum(char_bit_lengths[b] for b in pat_bytes)
     
     old_cost = occ * (L + pat_bits)
     new_cost = occ * (1 + token_bits_after)
-    dict_cost = (varint_size(L) * 8) + pat_bits
+    dict_cost = exp_size(L) + pat_bits
     
     return old_cost - new_cost - dict_cost
 
 # ---------------------------
-# Build dictionary (esaustivo su partizioni)
+# Dictionary build (exhaustive over partitions)
 # ---------------------------
+
+# exhaustive search: tries every combination of one partition per string. Every distinct fragment of the combination
+# becomes a dictionary entry (after the initial separators, if any); the combination with the highest total
+# estimated gain wins.
 def build_dictionary(byte_strings: list, char_bit_lengths: dict, encoding: int, init_dict: list | None = None, init_freqs: dict | None = None) -> list | None:
     codec = CODECS[encoding]
     base_dict = list(init_dict)  if init_dict  else []
@@ -696,6 +743,7 @@ def build_dictionary(byte_strings: list, char_bit_lengths: dict, encoding: int, 
         for partition in combination:
             all_fragments.extend(partition)
         
+        # accumulation of frequencies and estimation of token costs
         frag_counts = defaultdict(int)
         for frag in all_fragments:
             if frag not in base_set:
@@ -714,6 +762,7 @@ def build_dictionary(byte_strings: list, char_bit_lengths: dict, encoding: int, 
         
         tok_bits_by_id = codec['token_lengths'](pool_freqs, total_size)
         
+        # evaluation via the gain function
         score = sum(
             scoring_function(frags[j], frag_counts[frags[j]], char_bit_lengths, tok_bits_by_id[len(base_dict) + j])
             for j in range(len(frags))
@@ -723,6 +772,7 @@ def build_dictionary(byte_strings: list, char_bit_lengths: dict, encoding: int, 
             best_score = score
             best_combination = all_fragments
     
+    # extraction of the final dictionary
     if best_combination is None:
         return base_dict if base_dict else None
     
@@ -734,8 +784,10 @@ def build_dictionary(byte_strings: list, char_bit_lengths: dict, encoding: int, 
     return base_dict + list(final_counts.keys())
 
 # ---------------------------
-# Tokenizzazione
+# Tokenization
 # ---------------------------
+
+# longest match: at every position the longest dictionary entry that matches becomes a token, otherwise a RAW byte.
 def _tokenize(s: bytes, dictionary: list) -> list:
     seq = []
     i = 0
@@ -760,6 +812,8 @@ def _tokenize(s: bytes, dictionary: list) -> list:
     
     return seq
 
+# sequences of the original strings. Separators in the dictionary: plain tokenization of the whole strings.
+# separators as RAW: they are written as RAW bytes and only the pieces between them are tokenized.
 def _rebuild_original_seqs(byte_strings: list, subseqs: list, sep_freqs: dict, dictionary: list, sep_in_dict: bool) -> list:
     separators = list(sep_freqs.keys())
     
@@ -804,12 +858,19 @@ def _rebuild_original_seqs(byte_strings: list, subseqs: list, sep_freqs: dict, d
     
     return seqs
 
+# positional: renumbers the tokens by decreasing frequency, so the id written in the stream is its rank
+# (the most frequent token gets id 0, the shortest elias gamma code).
+# the dictionary is written in the new order, so the decoder rebuilds the same id -> entry mapping.
 def _reorder_dict_for_positional(dictionary: list, seqs: list) -> tuple:
     D = len(dictionary)
     tok_freqs = count_tok_freqs(seqs)
+    
+    # old_order[r] = old id of the token with rank r (stable sort: ties keep their order, the size does not change)
     old_order = sorted(range(D), key = lambda i: tok_freqs.get(i, 0), reverse = True)
     new_dict = [dictionary[i] for i in old_order]
     old_to_new = {old: new for new, old in enumerate(old_order)}
+    
+    # only token ids change: raw bytes and positions in the stream are untouched
     new_seqs = [[(TOK, old_to_new[v]) if t == TOK else (RAW, v) for t, v in seq] for seq in seqs]
     
     return new_dict, new_seqs, count_tok_freqs(new_seqs)
@@ -830,8 +891,10 @@ def encode_onefile(input_txt: str, output_bin: str, sep_in_dict: bool = True, en
     all_bytes_for_alpha = list(subseqs) + list(sep_freqs.keys())
     alphabet, byte_to_id, char_bits, raw_freq = build_alphabet(all_bytes_for_alpha, sort_by_freq)
     char_freqs = {byte_to_id[bv]: cnt for bv, cnt in raw_freq.items()}
+    # character costs are fixed for the whole search: the alphabet does not depend on the dictionary
     char_bit_lengths = compute_char_bit_lengths(alphabet, char_freqs, encoding)
     
+    # separators in the dictionary: they are the first entries, with their counts as frequencies
     if sep_in_dict and sep_freqs:
         init_dict = list(sep_freqs.keys())
         init_freqs = dict(sep_freqs)
@@ -847,9 +910,11 @@ def encode_onefile(input_txt: str, output_bin: str, sep_in_dict: bool = True, en
     D = len(dictionary)
     token_bits = needed_bits(D)
     
+    # the chosen partition is not kept: the strings are tokenized again on the final dictionary
     seqs = _rebuild_original_seqs(byte_strings, subseqs, sep_freqs, dictionary, sep_in_dict)
     tok_freqs = count_tok_freqs(seqs)
     
+    # positional: token ids must equal their frequency rank before writing
     if encoding == ENC_POSITIONAL:
         dictionary, seqs, tok_freqs = _reorder_dict_for_positional(dictionary, seqs)
     
@@ -862,8 +927,7 @@ def encode_onefile(input_txt: str, output_bin: str, sep_in_dict: bool = True, en
     tok_codes = codec['encode_codes_from_lengths'](tok_lengths_by_id)
     
     bw = BitWriter()
-    bw.write_bytes_aligned(MAGIC)
-    bw.write_bytes_aligned(bytes([VERSION, encoding]))
+    bw.write_bytes_aligned(bytes([encoding]))
     
     write_alphabet_section(bw, alphabet, char_freqs, encoding)
     write_dictionary_section(bw, dictionary, byte_to_id, tok_freqs, char_codes, char_bits, encoding)
@@ -897,23 +961,12 @@ def decompress_onefile(path_bin: str) -> list:
         data = f.read()
     
     pos = 0
-    
-    if data[pos : pos+4] != MAGIC:
-        raise ValueError("MAGIC non valido")
-    
-    pos += 4
-    ver = data[pos]
-    pos += 1
     encoding = data[pos]
     pos += 1
-    
-    if ver != VERSION:
-        raise ValueError(f"Versione non supportata: {ver}")
-    
-    alphabet, char_decoder, pos = read_alphabet_section(data, pos, encoding)
-    D, pos = uvarint_decode(data, pos)
-    
+
     br = BitReader(data, pos)
+    alphabet, char_decoder = read_alphabet_section(br, encoding)
+    D = exp_read(br)
     dictionary, tok_decoder = read_dictionary_section(br, alphabet, char_decoder, encoding, D)
     
     return read_stream(br, alphabet, dictionary, encoding, char_decoder, tok_decoder)
@@ -922,13 +975,13 @@ def decompress_onefile(path_bin: str) -> list:
 # CLI
 # ---------------------------
 def main():
-    ap = argparse.ArgumentParser(description = "SDB1: compressore esaustivo su partizioni")
+    ap = argparse.ArgumentParser(description = "Exhaustive compressor over partitions")
     
     ap.add_argument("mode", choices = ["compress", "decompress"])
     ap.add_argument("input")
     ap.add_argument("output", nargs = "?")
-    ap.add_argument("--sep-as-raw", action = "store_true", default = False, help = "Scrivi i separatori come RAW invece che nel dizionario")
-    ap.add_argument("--encoding", default = 'fixed', choices = ['fixed', 'huffman-freq', 'huffman-len', 'positional'], help = "Modalità codifica simboli (default: fixed)")
+    ap.add_argument("--sep-as-raw", action = "store_true", default = False, help = "Write the separators as RAW instead of in the dictionary")
+    ap.add_argument("--encoding", default = 'fixed', choices = ['fixed', 'huffman-freq', 'huffman-len', 'positional'], help = "Symbols encoding modes (default: fixed)")
     
     args = ap.parse_args()
     

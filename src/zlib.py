@@ -275,13 +275,13 @@ def decompress_onefile(path_bin: str) -> list:
 # CLI
 # ---------------------------
 def main():
-    ap = argparse.ArgumentParser(description = "Baseline zlib/deflate con dizionario condiviso (zdict)")
+    ap = argparse.ArgumentParser(description = "Zlib/deflate baseline with a shared dictionary (zdict)")
 
     ap.add_argument("mode", choices = ["compress", "decompress"])
     ap.add_argument("input")
     ap.add_argument("output", nargs = "?")
-    ap.add_argument("--level", type = int, default = 9, help = "Livello compressione zlib (0-9, default 9)")
-    ap.add_argument("--max-dict-bytes", type = int, default = ZLIB_MAX_ZDICT, help = f"Dimensione massima zdict (hard limit zlib = {ZLIB_MAX_ZDICT})")
+    ap.add_argument("--level", type = int, default = 9, help = "Zlib compression level (0-9, default 9)")
+    ap.add_argument("--max-dict-bytes", type = int, default = ZLIB_MAX_ZDICT, help = f"Maximum zdict size in bytes (zlib hard limit = {ZLIB_MAX_ZDICT})")
 
     args = ap.parse_args()
 

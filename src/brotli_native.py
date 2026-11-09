@@ -109,13 +109,13 @@ def decompress_onefile(path_bin: str) -> list:
 # CLI
 # ---------------------------
 def main():
-    ap = argparse.ArgumentParser(description = "brotli nativo")
+    ap = argparse.ArgumentParser(description = "Native brotli")
 
     ap.add_argument("mode", choices = ["compress", "decompress"])
     ap.add_argument("input")
     ap.add_argument("output", nargs = "?")
-    ap.add_argument("--quality", type = int, default = 11, help = "Qualita' brotli (0-11, default 11 = massima)")
-    ap.add_argument("--lgwin", type = int, default = 24, help = "log2 finestra (10-24, default 24)")
+    ap.add_argument("--quality", type = int, default = 11, help = "Brotli quality (0-11, default 11 = maximum)")
+    ap.add_argument("--lgwin", type = int, default = 24, help = "log2 of the window size (10-24, default 24)")
 
     args = ap.parse_args()
 

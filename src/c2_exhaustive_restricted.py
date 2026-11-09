@@ -54,7 +54,7 @@ def setup_logger(input_filename):
             logging.StreamHandler(),
         ],
     )
-
+    
 # ---------------------
 # Exponential encoding
 # ---------------------
@@ -65,11 +65,14 @@ def exp_size(x: int, n0: int = EXP_N0) -> int:
     n = n0
     total_bits = 0
     first_ext = True
+    
     while True:
         threshold = (1 << n) - 1
         total_bits += n
+        
         if x < threshold:
             return total_bits
+        
         x -= threshold
         if first_ext:
             first_ext = False
@@ -79,13 +82,17 @@ def exp_size(x: int, n0: int = EXP_N0) -> int:
 def exp_write(bw, x: int, n0: int = EXP_N0):
     n = n0
     first_ext = True
+    
     while True:
         threshold = (1 << n) - 1
+        
         if x < threshold:
             bw.write_bits(x, n)
             return
+        
         bw.write_bits(threshold, n)
         x -= threshold
+        
         if first_ext:
             first_ext = False
         else:
@@ -95,11 +102,14 @@ def exp_read(br, n0: int = EXP_N0) -> int:
     n = n0
     total = 0
     first_ext = True
+    
     while True:
         v = br.read_bits(n)
         threshold = (1 << n) - 1
+        
         if v < threshold:
             return total + v
+        
         total += threshold
         if first_ext:
             first_ext = False
@@ -110,7 +120,7 @@ def needed_bits(n: int) -> int:
     return 1 if n <= 1 else math.ceil(math.log2(n))
 
 # ---------------------------
-# Bit reader / writer
+# Bit packer / unpacker
 # ---------------------------
 class BitWriter:
     def __init__(self):
@@ -178,6 +188,8 @@ class BitReader:
 # ---------------------------
 # Huffman
 # ---------------------------
+
+# huffman code length of every symbol (only lengths: actual codes are built canonically from them).
 def huffman_lengths(freq_map: dict) -> dict:
     if not freq_map:
         return {}
@@ -185,6 +197,7 @@ def huffman_lengths(freq_map: dict) -> dict:
     if len(freq_map) == 1:
         return {next(iter(freq_map)): 1}
     
+    # [freq, tie, symbols]: 'tie' makes the merge order deterministic, so encoder and decoder agree
     heap = [[f, i, [s]] for i, (s, f) in enumerate(sorted(freq_map.items()))]
     heapq.heapify(heap)
     
@@ -195,6 +208,7 @@ def huffman_lengths(freq_map: dict) -> dict:
         f1, _, s1 = heapq.heappop(heap)
         f2, _, s2 = heapq.heappop(heap)
         
+        # every symbol of the two merged nodes moves one level deeper
         for s in s1:
             lengths[s] += 1
         for s in s2:
@@ -205,6 +219,7 @@ def huffman_lengths(freq_map: dict) -> dict:
     
     return lengths
 
+# canonical Huffman codes {symbol: (code, length)}: fully determined by the lengths.
 def canonical_codes(lengths: dict) -> dict:
     syms = sorted(lengths.keys(), key = lambda s: (lengths[s], s))
     
@@ -215,6 +230,7 @@ def canonical_codes(lengths: dict) -> dict:
     for s in syms:
         L = lengths[s]
         
+        # longer codes: shift left, so no shorter code is a prefix of a longer one
         if L > prev:
             code <<= (L - prev)
         
@@ -224,8 +240,10 @@ def canonical_codes(lengths: dict) -> dict:
     
     return codes
 
+# decoder side of canonical_codes: {(code, length): symbol} and the maximum code length.
 def canonical_lookup(lengths: dict) -> tuple:
     syms = sorted(lengths.keys(), key = lambda s: (lengths[s], s))
+    
     lookup = {}
     code = 0
     prev = 0
@@ -244,6 +262,7 @@ def canonical_lookup(lengths: dict) -> tuple:
     
     return lookup, max_len
 
+# scales frequencies to 1..255.
 def normalize_freqs(freq_map: dict, n: int) -> list:
     max_f = max(freq_map.values()) if freq_map else 1
     return [max(1, min(255, round(freq_map.get(i, 1) * 255 / max_f))) for i in range(n)]
@@ -280,18 +299,22 @@ def _uniform_lengths(count: int) -> dict:
     bits = needed_bits(count)
     return {i: bits for i in range(count)}
 
+# huffman lengths computed on the normalized frequencies: the decoder only sees those, so it rebuilds the same tree.
 def _huffman_freq_lengths(freqs: dict, count: int) -> dict:
     if count == 0:
         return {}
     
     return huffman_lengths(dict(enumerate(normalize_freqs(freqs, count))))
 
+# huffman lengths limited to 15 bits, so that each one fits in the 4-bit table of huffman-len.
 def _huffman_len_lengths(freqs: dict, count: int) -> dict:
     lengths = huffman_lengths({i: freqs.get(i, 1) for i in range(count)})
     if not lengths or max(lengths.values(), default = 0) <= 15:
         return lengths
     
     new_lengths = {sym: min(L, 15) for sym, L in lengths.items()}
+    
+    # Kraft inequality, scaled by 2^15 to stay in integers: sum(2^(15 - L)) <= 2^15
     target = 1 << 15
     
     while True:
@@ -300,6 +323,7 @@ def _huffman_len_lengths(freqs: dict, count: int) -> dict:
         if kraft_sum <= target:
             break
             
+        # lengthen the longest code still below 15 (the rarest symbol, cheapest to lengthen)
         candidates = [sym for sym, L in new_lengths.items() if L < 15]
         best_sym = max(candidates, key = lambda s: (new_lengths[s], s))
         new_lengths[best_sym] += 1
@@ -444,6 +468,9 @@ HUFFMAN_LEN_CODEC = {
     'overhead_bits': _huffman_len_overhead_bits,
 }
 
+# every encoding exposes the same interface, so the search and the writer never branch on the encoding.
+# search side: char_lengths, token_lengths, overhead_bits. Writer side: encode_codes_from_lengths,
+# write_symbol, write_overhead. Decoder side: decoder_from_lengths, read_symbol, read_overhead.
 CODECS = {
     ENC_FIXED: FIXED_CODEC,
     ENC_HUFF_FREQ: HUFFMAN_FREQ_CODEC,
@@ -460,13 +487,16 @@ def write_sym(bw: BitWriter, sym_id: int, encoding: int, codes: dict, fixed_bits
 def read_sym(br: BitReader, encoding: int, decoder: dict) -> int:
     return CODECS[encoding]['read_symbol'](br, decoder)
 
+# bit length of every byte under the chosen encoding, keyed by byte value (used by all cost functions).
 def compute_char_bit_lengths(alphabet: bytes, char_freqs: dict, encoding: int) -> dict:
     lengths_by_id = CODECS[encoding]['char_lengths'](alphabet, char_freqs)
     return {alphabet[i]: lengths_by_id[i] for i in range(len(alphabet))}
 
 # ---------------------------
-# I/O
+# I/O strings
 # ---------------------------
+
+# reads one string per line
 def read_strings_text(path: str) -> list:
     out = []
     
@@ -490,6 +520,7 @@ def read_strings_text(path: str) -> list:
 def to_utf8_bytes(strings: list) -> list:
     return [s.encode("utf-8") for s in strings]
 
+# builds the alphabet (distinct bytes), the byte -> id map, the fixed code width and the byte frequencies.
 def build_alphabet(byte_strings: list, sort_by_freq: bool = False) -> tuple:
     freq = defaultdict(int)
     
@@ -497,6 +528,7 @@ def build_alphabet(byte_strings: list, sort_by_freq: bool = False) -> tuple:
         for bv in bs:
             freq[bv] += 1
     
+    # positional: ids follow decreasing frequency, so the id is the rank used by Elias gamma
     srt = (sorted(freq, key = lambda bv: freq[bv], reverse = True) if sort_by_freq else sorted(freq))
     alph = bytes(srt)
     inv = {alph[i]: i for i in range(len(alph))}
@@ -605,6 +637,8 @@ def read_stream(br: BitReader, alphabet: bytes, dictionary: list, encoding: int,
 # ---------------------------
 # Scoring
 # ---------------------------
+
+# occurrences of every token id in the strings (input of the token code lengths).
 def count_tok_freqs(seqs: list) -> dict:
     tok_freqs = defaultdict(int)
     
@@ -616,42 +650,46 @@ def count_tok_freqs(seqs: list) -> dict:
     return tok_freqs
 
 ALIGNED_OVERHEAD = {ENC_HUFF_FREQ, ENC_HUFF_LEN}
- 
+
 def ceil_to_byte(bits: int) -> int:
     return (bits + 7) // 8 * 8
- 
+
+# exact size in bits of the dictionary section and of the stream. 
+# the encoding byte and the alphabet section are excluded: they do not depend on the dictionary.
 def score_dictionary_bits(dictionary: list, seqs: list, char_bit_lengths: dict, encoding: int) -> int:
-    """Exact size in bits of the dictionary section and of the stream, as written by encode_onefile."""
-    
     D = len(dictionary)
     codec = CODECS[encoding]
- 
+
+    # token code lengths from the actual frequencies: existing tokens may change length when a new one is added
     tok_bits = codec['token_lengths'](count_tok_freqs(seqs), D)
- 
+
     dict_bits = exp_size(D)
     for entry in dictionary:
+        # entries contain only characters: no RAW/TOK control bit here
         entry_header_bits = exp_size(len(entry))
         entry_body_bits = sum(char_bit_lengths[b] for b in entry)
         dict_bits += entry_header_bits + entry_body_bits
- 
+
     if encoding in ALIGNED_OVERHEAD:
         dict_bits = ceil_to_byte(dict_bits)
- 
+
     dict_bits += codec['overhead_bits'](D)
- 
+
     stream_bits = exp_size(len(seqs))
     for seq in seqs:
         seq_header_bits = exp_size(len(seq))
- 
+
         seq_body_bits = 0
         for typ, val in seq:
+            # 1 control bit (RAW/TOK) + the character or token code
             seq_body_bits += 1
             seq_body_bits += char_bit_lengths[val] if typ == RAW else tok_bits[val]
- 
+
         stream_bits += seq_header_bits + seq_body_bits
- 
+
     return dict_bits + stream_bits
 
+# code length the new token d would get if added with occ occurrences.
 def token_bits_for_candidate(codec: dict, tok_freqs: dict, d: int, occ: int) -> int:
     combined = dict(tok_freqs)
     combined[d] = occ
@@ -671,9 +709,12 @@ def scoring_function(pat_bytes: bytes, occ: int, char_bit_lengths: dict, token_b
 # ---------------------------
 # Dictionary build
 # ---------------------------
+
+# every string as a sequence of RAW bytes.
 def initial_sequences(byte_strings: list) -> list:
     return [[(RAW, x) for x in bs] for bs in byte_strings]
 
+# substrings of contiguous RAW bytes (min_len..max_len) occurring at least twice, with their counts.
 def find_candidates(seqs: list, min_len: int = 3, max_len: int = 32) -> dict:
     counts = defaultdict(int)
     
@@ -686,6 +727,7 @@ def find_candidates(seqs: list, min_len: int = 3, max_len: int = 32) -> dict:
             
             acc = []
             for j in range(i, min(n, i + max_len)):
+                # fragments never overlap a token: dictionary entries are made of raw bytes only
                 if seq[j][0] != RAW:
                     break
                 
@@ -696,6 +738,7 @@ def find_candidates(seqs: list, min_len: int = 3, max_len: int = 32) -> dict:
     
     return {k: v for k, v in counts.items() if v >= 2}
 
+# non-overlapping occurrences of a fragment.
 def count_non_overlapping(seq: list, pat_bytes: bytes) -> int:
     pat = [(RAW, b) for b in pat_bytes]
     m = len(pat)
@@ -703,17 +746,19 @@ def count_non_overlapping(seq: list, pat_bytes: bytes) -> int:
     c = 0
     
     while i <= len(seq) - m:
-        if seq[i : i + m] == pat:
+        if seq[i : i+m] == pat:
             c += 1
-            i += m
+            i += m # skip the whole match: occurrences cannot overlap
         else:
             i += 1
     
     return c
 
+# non-overlapping occurrences of a fragment over all strings.
 def total_non_overlapping(seqs: list, pat_bytes: bytes) -> int:
     return sum(count_non_overlapping(seq, pat_bytes) for seq in seqs)
 
+# new sequences where each non-overlapping occurrence of the fragment becomes (TOK, token_id).
 def replace_non_overlapping(seqs: list, pat_bytes: bytes, token_id: int) -> list:
     pat = [(RAW, b) for b in pat_bytes]
     m = len(pat)
@@ -723,10 +768,10 @@ def replace_non_overlapping(seqs: list, pat_bytes: bytes, token_id: int) -> list
     
     for seq in seqs:
         out = []
-        i   = 0
+        i = 0
         
         while i < len(seq):
-            if i <= len(seq) - m and seq[i : i + m] == pat:
+            if i <= len(seq) - m and seq[i : i+m] == pat:
                 out.append(token)
                 i += m
             else:
@@ -737,6 +782,9 @@ def replace_non_overlapping(seqs: list, pat_bytes: bytes, token_id: int) -> list
     
     return out_all
 
+# greedy dictionary construction: repeatedly adds the fragment with the highest estimated gain.
+# starts from (init_dict, init_seqs) if given, otherwise from an empty state.
+# returns the best state seen.
 def greedy_build(byte_strings: list, char_bit_lengths: dict, encoding: int, min_len: int = 3, max_len: int = 32, max_dict: int = 1023, init_dict: list | None = None, init_seqs: list | None = None) -> tuple:
     seqs = init_seqs[:] if init_seqs is not None else initial_sequences(byte_strings)
     dictionary = list(init_dict) if init_dict is not None else []
@@ -778,13 +826,22 @@ def greedy_build(byte_strings: list, char_bit_lengths: dict, encoding: int, min_
     
     return best_dictionary, best_seqs
 
+# ---------------------------
+# Restricted lookahead search
+# ---------------------------
+
+# restricted search: for lookahead_depth levels every state is expanded only with its lookahead_topk candidates
+# with the highest estimated gain; every leaf is then completed with greedy_build
+# and the leaf with the smallest cost is returned.
 def build_dictionary_restricted(byte_strings: list, char_bit_lengths: dict, encoding: int, min_len: int = 3, max_len: int = 32, max_dict: int = 1023, lookahead_depth: int = 0, lookahead_topk: int = 1) -> tuple:
+    # no lookahead: plain greedy
     if lookahead_depth <= 0 and lookahead_topk <= 1:
         return greedy_build(byte_strings, char_bit_lengths, encoding, min_len, max_len, max_dict)
     
     codec = CODECS[encoding]
     init_seqs = initial_sequences(byte_strings)
     
+    # states of the current level: (dictionary, sequences)
     states = [([], init_seqs)]
     
     for _ in range(lookahead_depth):
@@ -793,6 +850,7 @@ def build_dictionary_restricted(byte_strings: list, char_bit_lengths: dict, enco
         for dict_so_far, seqs_so_far in states:
             D = len(dict_so_far)
             
+            # full dictionary: the state cannot be expanded and is kept as a leaf
             if D >= max_dict:
                 new_states.append((dict_so_far, seqs_so_far))
                 continue
@@ -812,10 +870,12 @@ def build_dictionary_restricted(byte_strings: list, char_bit_lengths: dict, enco
                 if gain > 0:
                     scored.append((gain, pat))
             
+            # no candidate with a positive gain: the state is kept as a leaf
             if not scored:
                 new_states.append((dict_so_far, seqs_so_far))
                 continue
             
+            # only the topk candidates with the highest estimated gain become children (bounded branching)
             scored.sort(key = lambda x: x[0], reverse = True)
             
             for _, pat in scored[:lookahead_topk]:
@@ -828,6 +888,7 @@ def build_dictionary_restricted(byte_strings: list, char_bit_lengths: dict, enco
     best_score = None
     best = None
     
+    # every leaf is completed with greedy_build and compared on its exact cost (strict '<': first best kept on ties)
     for dct, sqs in states:
         dct2, sqs2 = greedy_build(byte_strings, char_bit_lengths, encoding, min_len, max_len, max_dict, dct, sqs)
         bits = score_dictionary_bits(dct2, sqs2, char_bit_lengths, encoding)
@@ -841,13 +902,19 @@ def build_dictionary_restricted(byte_strings: list, char_bit_lengths: dict, enco
     
     return best
 
+# positional: renumbers the tokens by decreasing frequency, so the id written in the stream is its rank
+# (the most frequent token gets id 0, the shortest elias gamma code).
+# the dictionary is written in the new order, so the decoder rebuilds the same id -> entry mapping.
 def _reorder_dict_for_positional(dictionary: list, seqs: list) -> tuple:
     D = len(dictionary)
     tok_freqs = count_tok_freqs(seqs)
-    
+        
+    # old_order[r] = old id of the token with rank r
     old_order = sorted(range(D), key = lambda i: tok_freqs.get(i, 0), reverse = True)
     new_dict = [dictionary[i] for i in old_order]
     old_to_new = {old: new for new, old in enumerate(old_order)}
+    
+    # only token ids change: raw bytes and positions in the stream are untouched
     new_seqs = [[(TOK, old_to_new[v]) if t == TOK else (RAW, v) for t, v in seq] for seq in seqs]
     
     return new_dict, new_seqs, count_tok_freqs(new_seqs)
@@ -865,6 +932,8 @@ def encode_onefile(input_txt: str, output_bin: str, min_len: int = 3, max_len: i
     sort_by_freq = (encoding == ENC_POSITIONAL)
     alphabet, byte_to_id, char_bits, raw_freq = build_alphabet(byte_strings, sort_by_freq)
     char_freqs = {byte_to_id[bv]: cnt for bv, cnt in raw_freq.items()}
+    
+    # character costs are fixed for the whole search: the alphabet does not depend on the dictionary
     char_bit_lengths = compute_char_bit_lengths(alphabet, char_freqs, encoding)
     
     dictionary, seqs = build_dictionary_restricted(byte_strings, char_bit_lengths, encoding, min_len, max_len, max_dict, lookahead_depth, lookahead_topk)
@@ -874,13 +943,11 @@ def encode_onefile(input_txt: str, output_bin: str, min_len: int = 3, max_len: i
     
     tok_freqs = defaultdict(int)
     
+    # positional: token ids must equal their frequency rank before writing
     if encoding == ENC_POSITIONAL:
         dictionary, seqs, tok_freqs = _reorder_dict_for_positional(dictionary, seqs)
     else:
-        for seq in seqs:
-            for typ, val in seq:
-                if typ == TOK:
-                    tok_freqs[val] += 1
+        tok_freqs = count_tok_freqs(seqs)
     
     codec = CODECS[encoding]
     
@@ -892,7 +959,7 @@ def encode_onefile(input_txt: str, output_bin: str, min_len: int = 3, max_len: i
     
     bw = BitWriter()
     bw.write_bytes_aligned(bytes([encoding]))
-
+    
     write_alphabet_section(bw, alphabet, char_freqs, encoding)
     write_dictionary_section(bw, dictionary, byte_to_id, tok_freqs, char_codes, char_bits, encoding)
     
@@ -949,7 +1016,7 @@ def main():
     ap.add_argument("--max-len", type = int, default = 32)
     ap.add_argument("--max-dict", type = int, default = 1023)
     ap.add_argument("--lookahead-depth", type = int, default = 0, help = "Depth (0 = greedy)")
-    ap.add_argument("--lookahead-topk", type = int, default = 1, help = "Candidated per node (1 = greedy)")
+    ap.add_argument("--lookahead-topk", type = int, default = 1, help = "Candidates per node (1 = greedy)")
     ap.add_argument("--encoding", default = 'fixed', choices = ['fixed', 'huffman-freq', 'huffman-len', 'positional'], help = "Symbols encoding modes (default: fixed)")
     
     args = ap.parse_args()

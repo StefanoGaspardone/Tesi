@@ -108,12 +108,12 @@ def decompress_onefile(path_bin: str) -> list:
 # CLI
 # ---------------------------
 def main():
-    ap = argparse.ArgumentParser(description = "zlib nativo")
+    ap = argparse.ArgumentParser(description = "Native zlib")
 
     ap.add_argument("mode", choices = ["compress", "decompress"])
     ap.add_argument("input")
     ap.add_argument("output", nargs = "?")
-    ap.add_argument("--level", type = int, default = 9, help = "Livello compressione zlib (0-9, default 9)")
+    ap.add_argument("--level", type = int, default = 9, help = "Zlib compression level (0-9, default 9)")
 
     args = ap.parse_args()
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# zstd nativo
+# zstd native
 
 import argparse
 import ast
@@ -113,12 +113,12 @@ def decompress_onefile(path_bin: str) -> list:
 # CLI
 # ---------------------------
 def main():
-    ap = argparse.ArgumentParser(description = "zstd nativo")
+    ap = argparse.ArgumentParser(description = "Native zstd")
 
     ap.add_argument("mode", choices = ["compress", "decompress"])
     ap.add_argument("input")
     ap.add_argument("output", nargs = "?")
-    ap.add_argument("--level", type = int, default = 22, help = "Livello compressione zstd (1-22, default 22 = ultra)")
+    ap.add_argument("--level", type = int, default = 22, help = "Zstd compression level (1-22, default 22 = ultra)")
 
     args = ap.parse_args()
 

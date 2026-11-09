@@ -164,9 +164,6 @@ class BitReader:
     def align_to_byte(self):
         self.nbits = 0
 
-# ---------------------------
-# Ponte ctypes verso libbrotlienc / libbrotlidec
-# ---------------------------
 def _candidate_names(base: str) -> list:
     system = platform.system()
 
@@ -216,26 +213,7 @@ def _load_one(base: str):
     if lib is not None:
         return lib
 
-    system = platform.system()
-
-    if system == "Windows":
-        hint = (
-            "Su Windows queste DLL non sono incluse di default. Se hai gia' MSYS2 "
-            "installato (usato anche per compilare c2.dll), il modo piu' semplice e':\n"
-            "  pacman -S mingw-w64-x86_64-brotli\n"
-            + (f"(gia' cercate anche in: {', '.join(added_dirs)}, senza successo)\n" if added_dirs else
-               "Le cartelle MSYS2 abituali (C:\\msys64\\mingw64\\bin, C:\\msys64\\ucrt64\\bin) "
-               "non sono state trovate su questo sistema: se MSYS2 e' installato altrove, "
-               "imposta la variabile d'ambiente MSYS2_ROOT alla cartella bin corretta, oppure "
-               "copia le DLL (incluse le loro dipendenze) nella stessa cartella di questo file.")
-        )
-    elif system == "Darwin":
-        hint = "Su macOS: brew install brotli"
-    else:
-        hint = "Su Linux: apt install libbrotli1 (o l'equivalente della tua distro)"
-
-    details = "\n".join(f"  - {name}: {err}" for name, err in tried)
-    raise OSError(f"Impossibile caricare la libreria nativa '{base}'. Nomi provati:\n{details}\n\n{hint}")
+    raise OSError(f"Unable to load the native library '{base}'")
 
 def _load_brotli_native():
     lib_enc = _load_one("brotlienc")
@@ -283,10 +261,10 @@ def compress_one(data: bytes, zdict: bytes, quality: int, lgwin: int) -> bytes:
                 ctypes.cast(dict_buf, POINTER(c_uint8)), quality, None, None, None)
 
             if not prepared:
-                raise RuntimeError("BrotliEncoderPrepareDictionary fallita")
+                raise RuntimeError("BrotliEncoderPrepareDictionary failed")
 
             if not _LIB_ENC.BrotliEncoderAttachPreparedDictionary(state, prepared):
-                raise RuntimeError("BrotliEncoderAttachPreparedDictionary fallita")
+                raise RuntimeError("BrotliEncoderAttachPreparedDictionary failed")
 
         in_buf = (c_uint8 * len(data)).from_buffer_copy(data)
         avail_in = c_size_t(len(data))
@@ -302,10 +280,10 @@ def compress_one(data: bytes, zdict: bytes, quality: int, lgwin: int) -> bytes:
             byref(avail_in), byref(next_in), byref(avail_out), byref(next_out), None)
 
         if not ok:
-            raise RuntimeError("BrotliEncoderCompressStream fallita")
+            raise RuntimeError("BrotliEncoderCompressStream failed")
 
         if not _LIB_ENC.BrotliEncoderIsFinished(state):
-            raise RuntimeError("BrotliEncoderCompressStream non ha completato lo stream (buffer di output insufficiente?)")
+            raise RuntimeError("BrotliEncoderCompressStream failed")
 
         produced = cap - avail_out.value
         return bytes(out_buf[:produced])
@@ -324,7 +302,7 @@ def decompress_one(data: bytes, zdict: bytes) -> bytes:
             if not _LIB_DEC.BrotliDecoderAttachDictionary(
                 state, BROTLI_SHARED_DICTIONARY_RAW, len(zdict), ctypes.cast(dict_buf, POINTER(c_uint8))
             ):
-                raise RuntimeError("BrotliDecoderAttachDictionary fallita")
+                raise RuntimeError("BrotliDecoderAttachDictionary failed")
 
         in_buf = (c_uint8 * len(data)).from_buffer_copy(data)
         avail_in = c_size_t(len(data))
@@ -349,7 +327,7 @@ def decompress_one(data: bytes, zdict: bytes) -> bytes:
             elif res == 3:
                 continue
             else:
-                raise RuntimeError(f"BrotliDecoderDecompressStream errore (result={res})")
+                raise RuntimeError(f"BrotliDecoderDecompressStream error (result={res})")
 
         return bytes(out)
     finally:
@@ -459,13 +437,13 @@ def decompress_onefile(path_bin: str) -> list:
 # CLI
 # ---------------------------
 def main():
-    ap = argparse.ArgumentParser(description = "Baseline brotli con dizionario condiviso vero (ctypes su API nativa)")
+    ap = argparse.ArgumentParser(description = "Brotli baseline with a true shared dictionary (ctypes on the native API)")
 
     ap.add_argument("mode", choices = ["compress", "decompress"])
     ap.add_argument("input")
     ap.add_argument("output", nargs = "?")
-    ap.add_argument("--quality", type = int, default = 11, help = "Qualita' brotli (0-11, default 11 = massima)")
-    ap.add_argument("--lgwin", type = int, default = BROTLI_MAX_WINDOW_BITS, help = f"log2 finestra (10-{BROTLI_MAX_WINDOW_BITS}, default {BROTLI_MAX_WINDOW_BITS})")
+    ap.add_argument("--quality", type = int, default = 11, help = "Brotli quality (0-11, default 11 = maximum)")
+    ap.add_argument("--lgwin", type = int, default = BROTLI_MAX_WINDOW_BITS, help = f"log2 of the window size (10-{BROTLI_MAX_WINDOW_BITS}, default {BROTLI_MAX_WINDOW_BITS})")
 
     args = ap.parse_args()
 
