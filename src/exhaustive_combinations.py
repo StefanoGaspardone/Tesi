@@ -626,6 +626,7 @@ def read_stream(br: BitReader, alphabet: bytes, dictionary: list, encoding: int,
 def split_strings(strings: list[bytes]) -> tuple[list[bytes], dict[bytes, int]]:
     char_map = {}
     
+    # left and right neighbours of every byte over the whole dataset
     for s in strings:
         for i in range(len(s)):
             char = s[i : i + 1]
@@ -643,6 +644,7 @@ def split_strings(strings: list[bytes]) -> tuple[list[bytes], dict[bytes, int]]:
     separators = []
     initial_dict = {}
     
+    # separator: no repeated neighbour, neither on the left nor on the right
     for char, data in char_map.items():
         pre_unique  = len(set(data['pre']))  == len(data['pre'])
         post_unique = len(set(data['post'])) == len(data['post'])
@@ -654,6 +656,7 @@ def split_strings(strings: list[bytes]) -> tuple[list[bytes], dict[bytes, int]]:
     if not separators:
         return strings, {}
     
+    # split on the separators, dropping empty pieces
     regex = b'|'.join(map(re.escape, separators))
     new_strings = []
     
@@ -673,10 +676,12 @@ def get_partitions(s: bytes) -> list:
     n = len(s)
     partitions = []
     
+    # for every partition (2^(n-1))
     for mask in range(1 << (n - 1)):
         partition = []
         start = 0
         
+        # mask bit that marks whether there is a cut or not
         for j in range(n - 1):
             if (mask >> j) & 1:
                 partition.append(s[start : j+1])

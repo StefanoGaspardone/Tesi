@@ -875,7 +875,7 @@ def build_dictionary_restricted(byte_strings: list, char_bit_lengths: dict, enco
                 new_states.append((dict_so_far, seqs_so_far))
                 continue
             
-            # only the topk candidates with the highest estimated gain become children (bounded branching)
+            # only the topk candidates with the highest estimated gain become children
             scored.sort(key = lambda x: x[0], reverse = True)
             
             for _, pat in scored[:lookahead_topk]:
@@ -888,7 +888,7 @@ def build_dictionary_restricted(byte_strings: list, char_bit_lengths: dict, enco
     best_score = None
     best = None
     
-    # every leaf is completed with greedy_build and compared on its exact cost (strict '<': first best kept on ties)
+    # every leaf is completed with greedy_build and compared on its exact cost
     for dct, sqs in states:
         dct2, sqs2 = greedy_build(byte_strings, char_bit_lengths, encoding, min_len, max_len, max_dict, dct, sqs)
         bits = score_dictionary_bits(dct2, sqs2, char_bit_lengths, encoding)
